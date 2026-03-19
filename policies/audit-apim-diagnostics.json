@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/managementGroupDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_comment": "Azure Policy – Audit APIM instances missing diagnostic settings for XFF logging",
+    "reference": "https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-use-azure-monitor"
+  },
+  "parameters": {
+    "effect": {
+      "type": "string",
+      "defaultValue": "AuditIfNotExists",
+      "allowedValues": ["AuditIfNotExists", "Disabled"],
+      "metadata": {
+        "displayName": "Effect",
+        "description": "Enable or disable the execution of the policy."
+      }
+    }
+  },
+  "policyRule": {
+    "if": {
+      "field": "type",
+      "equals": "Microsoft.ApiManagement/service"
+    },
+    "then": {
+      "effect": "[parameters('effect')]",
+      "details": {
+        "type": "Microsoft.Insights/diagnosticSettings",
+        "existenceCondition": {
+          "allOf": [
+            {
+              "field": "Microsoft.Insights/diagnosticSettings/logs.enabled",
+              "equals": "true"
+            },
+            {
+              "anyOf": [
+                {
+                  "field": "Microsoft.Insights/diagnosticSettings/workspaceId",
+                  "exists": "true"
+                },
+                {
+                  "field": "Microsoft.Insights/diagnosticSettings/storageAccountId",
+                  "exists": "true"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

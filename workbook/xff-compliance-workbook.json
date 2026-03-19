@@ -1,0 +1,284 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# XFF Compliance Dashboard\n\nMonitors X-Forwarded-For (XFF) header presence, normalization, and diagnostic coverage across **Application Gateway**, **API Management**, and **App Service**.\n\n---"
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "time-range",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 3600000, "createdTime": "2024-01-01T00:00:00Z", "isInitialTime": false, "grain": 1, "useDashboardTimeRange": false },
+                { "durationMs": 14400000, "createdTime": "2024-01-01T00:00:00Z", "isInitialTime": false, "grain": 1, "useDashboardTimeRange": false },
+                { "durationMs": 43200000, "createdTime": "2024-01-01T00:00:00Z", "isInitialTime": false, "grain": 1, "useDashboardTimeRange": false },
+                { "durationMs": 86400000, "createdTime": "2024-01-01T00:00:00Z", "isInitialTime": true, "grain": 1, "useDashboardTimeRange": false },
+                { "durationMs": 604800000, "createdTime": "2024-01-01T00:00:00Z", "isInitialTime": false, "grain": 1, "useDashboardTimeRange": false }
+              ]
+            },
+            "label": "Time Range"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 1. Application Gateway – Traffic Overview"
+      },
+      "name": "section-appgw"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AGWAccessLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count(), AvgLatencyMs = avg(TimeTaken) by bin(TimeGenerated, 5m), ListenerName\n| render timechart",
+        "size": 0,
+        "title": "App Gateway – Request Volume by Listener",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "appgw-traffic-timechart"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AGWAccessLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count() by ClientIp\n| top 15 by RequestCount desc",
+        "size": 0,
+        "title": "App Gateway – Top Client IPs",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "appgw-top-clients"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AGWAccessLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count() by HttpStatusCode\n| render piechart",
+        "size": 0,
+        "title": "App Gateway – Status Code Distribution",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "appgw-status-codes"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 2. APIM – XFF Presence & Compliance"
+      },
+      "name": "section-apim"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| extend xff = tostring(customDimensions[\"Request-Header-x-forwarded-for\"])\n| summarize\n    TotalRequests = count(),\n    WithXFF = countif(isnotempty(xff)),\n    WithoutXFF = countif(isempty(xff))\n| extend XffPresencePct = round(100.0 * WithXFF / TotalRequests, 2)\n| project TotalRequests, WithXFF, WithoutXFF, XffPresencePct",
+        "size": 0,
+        "title": "APIM – XFF Presence Rate",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": { "columnMatch": "XffPresencePct", "formatter": 1 },
+          "leftContent": { "columnMatch": "TotalRequests", "formatter": 12 }
+        }
+      },
+      "name": "apim-xff-rate"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| extend xff = tostring(customDimensions[\"Request-Header-x-forwarded-for\"])\n| summarize\n    WithXFF = countif(isnotempty(xff)),\n    WithoutXFF = countif(isempty(xff))\n    by bin(timestamp, 1h)\n| render timechart",
+        "size": 0,
+        "title": "APIM – XFF Presence Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      },
+      "name": "apim-xff-timechart"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 3. XFF Normalization – Malformed Detection"
+      },
+      "name": "section-normalization"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| extend xff = tostring(customDimensions[\"Request-Header-x-forwarded-for\"])\n| where isnotempty(xff) and xff has \":\"\n| summarize MalformedCount = count() by bin(timestamp, 1h)\n| render barchart",
+        "size": 0,
+        "title": "Non-Normalized XFF (contains :port) – Spikes = Missing Rewrite Rule",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      },
+      "name": "xff-malformed-detection"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 4. App Service – XFF in Application Insights"
+      },
+      "name": "section-appsvc"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| extend xff = tostring(customDimensions[\"X-Forwarded-For\"])\n| summarize\n    TotalRequests = count(),\n    WithXFF = countif(isnotempty(xff))\n| extend XffPct = round(100.0 * WithXFF / TotalRequests, 2)\n| project TotalRequests, WithXFF, XffPct",
+        "size": 0,
+        "title": "App Service – XFF Coverage via App Insights",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "tiles"
+      },
+      "name": "appsvc-xff-coverage"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppServiceHTTPLogs\n| where TimeGenerated {TimeRange}\n| summarize Requests = count() by bin(TimeGenerated, 5m), ScStatus = tostring(ScStatus)\n| render timechart",
+        "size": 0,
+        "title": "App Service – HTTP Traffic (native logs)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "appsvc-http-traffic"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 5. WAF Blocks (App Gateway Firewall)"
+      },
+      "name": "section-waf"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AGWFirewallLogs\n| where TimeGenerated {TimeRange}\n| where Action == \"Blocked\"\n| summarize BlockCount = count() by bin(TimeGenerated, 1h), RuleGroup\n| render barchart",
+        "size": 0,
+        "title": "WAF – Blocked Requests by Rule Group",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "name": "waf-blocks"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 6. Governance – Resource Graph Compliance\n\n> Run the following in **Azure Resource Graph Explorer** to check rewrite rule coverage:\n>\n> ```kusto\n> resources\n> | where type == \"microsoft.network/applicationgateways\"\n> | extend rewriteSets = properties.rewriteRuleSets\n> | extend hasRewrite = isnotempty(rewriteSets)\n> | project name, resourceGroup, subscriptionId, hasRewrite\n> | order by hasRewrite asc\n> ```"
+      },
+      "name": "section-governance"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 7. All IPs Calling the Application"
+      },
+      "name": "section-all-ips"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AGWAccessLogs\n| where TimeGenerated {TimeRange}\n| summarize\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated),\n    RequestCount = count(),\n    UniqueHosts = dcount(Host),\n    StatusCodes = make_set(HttpStatusCode)\n    by ClientIp\n| order by RequestCount desc",
+        "size": 0,
+        "title": "App Gateway – All Client IPs (Inventory)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "sortBy": [{ "itemKey": "RequestCount", "sortOrder": 2 }]
+        }
+      },
+      "name": "all-ips-appgw"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| extend xff = tostring(customDimensions[\"Request-Header-x-forwarded-for\"])\n| where isnotempty(xff)\n| mv-expand ip = split(xff, \",\")\n| extend ClientIpAddress = trim(\" \", tostring(ip))\n| where isnotempty(ClientIpAddress)\n| summarize\n    FirstSeen = min(timestamp),\n    LastSeen = max(timestamp),\n    RequestCount = count(),\n    UniqueApis = dcount(name),\n    SamplePaths = make_set(name, 5)\n    by ClientIpAddress\n| order by RequestCount desc",
+        "size": 0,
+        "title": "All IPs from XFF Chain (Original Client + Proxies)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "name": "all-ips-xff-chain"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| extend xff = tostring(customDimensions[\"Request-Header-x-forwarded-for\"])\n| extend OriginalClientIp = trim(\" \", tostring(split(xff, \",\")[0]))\n| extend Endpoint = name\n| where isnotempty(OriginalClientIp)\n| summarize Calls = count() by OriginalClientIp, Endpoint\n| order by Calls desc",
+        "size": 0,
+        "title": "IP → Endpoint Heatmap (Who Calls What)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "name": "ip-endpoint-heatmap"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AGWAccessLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count() by ClientIp, bin(TimeGenerated, 1h)\n| render timechart",
+        "size": 0,
+        "title": "IP Activity Timeline",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "ip-activity-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AGWAccessLogs\n| where TimeGenerated {TimeRange}\n| summarize\n    RequestCount = count(),\n    ErrorCount = countif(HttpStatusCode >= 400),\n    Unique4xxPaths = dcountif(RequestUri, HttpStatusCode >= 400 and HttpStatusCode < 500),\n    ErrorRate = round(100.0 * countif(HttpStatusCode >= 400) / count(), 2)\n    by ClientIp\n| where RequestCount > 100 or ErrorRate > 50\n| order by RequestCount desc",
+        "size": 0,
+        "title": "Suspicious IPs – High Volume or High Error Rate",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "suspicious-ips"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

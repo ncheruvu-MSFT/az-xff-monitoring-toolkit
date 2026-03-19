@@ -1,0 +1,114 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/managementGroupDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_comment": "Azure Policy – DeployIfNotExists: Auto-deploy Diagnostic Settings on App Gateway to Log Analytics",
+    "reference": "https://learn.microsoft.com/en-us/azure/application-gateway/monitor-application-gateway"
+  },
+  "parameters": {
+    "effect": {
+      "type": "string",
+      "defaultValue": "DeployIfNotExists",
+      "allowedValues": ["DeployIfNotExists", "Disabled"],
+      "metadata": {
+        "displayName": "Effect",
+        "description": "Enable or disable the execution of the policy."
+      }
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "displayName": "Log Analytics Workspace ID",
+        "description": "Full resource ID of the central Log Analytics workspace.",
+        "assignPermissions": true
+      }
+    },
+    "diagnosticSettingName": {
+      "type": "string",
+      "defaultValue": "xff-diag-appgw-auto",
+      "metadata": {
+        "displayName": "Diagnostic Setting Name",
+        "description": "Name for the auto-deployed diagnostic setting."
+      }
+    }
+  },
+  "policyRule": {
+    "if": {
+      "field": "type",
+      "equals": "Microsoft.Network/applicationGateways"
+    },
+    "then": {
+      "effect": "[parameters('effect')]",
+      "details": {
+        "type": "Microsoft.Insights/diagnosticSettings",
+        "name": "[parameters('diagnosticSettingName')]",
+        "existenceCondition": {
+          "allOf": [
+            {
+              "field": "Microsoft.Insights/diagnosticSettings/workspaceId",
+              "equals": "[parameters('logAnalyticsWorkspaceId')]"
+            },
+            {
+              "count": {
+                "field": "Microsoft.Insights/diagnosticSettings/logs[*]",
+                "where": {
+                  "field": "Microsoft.Insights/diagnosticSettings/logs[*].enabled",
+                  "equals": true
+                }
+              },
+              "greaterOrEquals": 1
+            }
+          ]
+        },
+        "roleDefinitionIds": [
+          "/providers/Microsoft.Authorization/roleDefinitions/749f88d5-cbae-40b8-bcfc-e573ddc772fa",
+          "/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+        ],
+        "deployment": {
+          "properties": {
+            "mode": "incremental",
+            "template": {
+              "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+              "contentVersion": "1.0.0.0",
+              "parameters": {
+                "resourceName": { "type": "string" },
+                "logAnalyticsWorkspaceId": { "type": "string" },
+                "diagnosticSettingName": { "type": "string" },
+                "location": { "type": "string" }
+              },
+              "resources": [
+                {
+                  "type": "Microsoft.Network/applicationGateways/providers/diagnosticSettings",
+                  "apiVersion": "2021-05-01-preview",
+                  "name": "[concat(parameters('resourceName'), '/Microsoft.Insights/', parameters('diagnosticSettingName'))]",
+                  "location": "[parameters('location')]",
+                  "properties": {
+                    "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                    "logs": [
+                      {
+                        "categoryGroup": "allLogs",
+                        "enabled": true
+                      }
+                    ],
+                    "metrics": [
+                      {
+                        "category": "AllMetrics",
+                        "enabled": true
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "parameters": {
+              "resourceName": { "value": "[field('name')]" },
+              "logAnalyticsWorkspaceId": { "value": "[parameters('logAnalyticsWorkspaceId')]" },
+              "diagnosticSettingName": { "value": "[parameters('diagnosticSettingName')]" },
+              "location": { "value": "[field('location')]" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

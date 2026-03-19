@@ -1,0 +1,74 @@
+<!--
+  APIM Global Policy – XFF Propagation & Logging
+  ============================================================================
+  Deploy as a global (all-APIs) policy in APIM to:
+    1. Ensure X-Forwarded-For is forwarded to the backend.
+    2. Log XFF (and resolved client IP) into APIM trace for debugging.
+    3. Optionally strip :port from XFF if App Gateway rewrite is not in place.
+
+  Reference:
+    https://learn.microsoft.com/en-us/azure/api-management/api-management-policies
+    https://learn.microsoft.com/en-us/azure/api-management/set-header-policy
+-->
+<policies>
+    <inbound>
+        <base />
+
+        <!--
+          1. Forward the original XFF to the backend.
+             'skip' = do not overwrite if already present (App Gateway set it).
+             Change to 'override' if you want APIM to rebuild XFF.
+        -->
+        <set-header name="X-Forwarded-For" exists-action="skip">
+            <value>@(context.Request.IpAddress)</value>
+        </set-header>
+
+        <!--
+          2. Optionally add a custom header with just the resolved client IP
+             (useful for backends that can't parse multi-hop XFF chains).
+        -->
+        <set-header name="X-Real-Client-IP" exists-action="override">
+            <value>@{
+                var xff = context.Request.Headers.GetValueOrDefault("X-Forwarded-For", "");
+                if (!string.IsNullOrEmpty(xff))
+                {
+                    // Take the first (leftmost) IP = original client
+                    var firstIp = xff.Split(',')[0].Trim();
+                    // Strip :port if present
+                    var colonIdx = firstIp.LastIndexOf(':');
+                    if (colonIdx > 0 && !firstIp.Contains('['))
+                    {
+                        firstIp = firstIp.Substring(0, colonIdx);
+                    }
+                    return firstIp;
+                }
+                return context.Request.IpAddress;
+            }</value>
+        </set-header>
+
+        <!--
+          3. Trace XFF for diagnostics (visible in APIM test console & App Insights).
+        -->
+        <trace source="xff-policy" severity="information">
+            <message>@($"XFF={context.Request.Headers.GetValueOrDefault("X-Forwarded-For", "(none)")}, CallerIP={context.Request.IpAddress}")</message>
+        </trace>
+    </inbound>
+
+    <backend>
+        <base />
+    </backend>
+
+    <outbound>
+        <base />
+
+        <!--
+          4. Remove internal headers from the response (defense in depth).
+        -->
+        <set-header name="X-Forwarded-For" exists-action="delete" />
+        <set-header name="X-Real-Client-IP" exists-action="delete" />
+    </outbound>
+
+    <on-error>
+        <base />
+    </on-error>
+</policies>

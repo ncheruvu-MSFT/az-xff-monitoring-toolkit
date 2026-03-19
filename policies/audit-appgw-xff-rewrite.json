@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/managementGroupDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_comment": "Azure Policy – Audit App Gateways missing XFF rewrite rule set",
+    "reference": "https://learn.microsoft.com/en-us/azure/application-gateway/rewrite-http-headers-url"
+  },
+  "parameters": {
+    "effect": {
+      "type": "string",
+      "defaultValue": "Audit",
+      "allowedValues": ["Audit", "Deny", "Disabled"],
+      "metadata": {
+        "displayName": "Effect",
+        "description": "Enable or disable the execution of the policy."
+      }
+    },
+    "requiredRewriteRuleSetName": {
+      "type": "string",
+      "defaultValue": "xff-normalization-ruleset",
+      "metadata": {
+        "displayName": "Required Rewrite Rule Set Name",
+        "description": "Name of the rewrite rule set that must be present on each Application Gateway."
+      }
+    }
+  },
+  "policyRule": {
+    "if": {
+      "allOf": [
+        {
+          "field": "type",
+          "equals": "Microsoft.Network/applicationGateways"
+        },
+        {
+          "not": {
+            "field": "Microsoft.Network/applicationGateways/rewriteRuleSets[*].name",
+            "equals": "[parameters('requiredRewriteRuleSetName')]"
+          }
+        }
+      ]
+    },
+    "then": {
+      "effect": "[parameters('effect')]"
+    }
+  }
+}

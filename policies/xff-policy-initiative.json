@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/managementGroupDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_comment": "Policy Initiative (Initiative) – XFF Compliance. Bundles all XFF-related policies.",
+    "reference": "https://learn.microsoft.com/en-us/azure/governance/policy/concepts/initiative-definition-structure"
+  },
+  "parameters": {
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "displayName": "Central Log Analytics Workspace ID",
+        "description": "Resource ID of the target workspace for diagnostic settings."
+      }
+    }
+  },
+  "policyDefinitions": [
+    {
+      "policyDefinitionReferenceId": "AuditAppGwXffRewrite",
+      "policyDefinitionId": "<policy-definition-id-for-audit-appgw-xff-rewrite>",
+      "parameters": {
+        "effect": { "value": "Audit" }
+      }
+    },
+    {
+      "policyDefinitionReferenceId": "DeployAppGwDiagnostics",
+      "policyDefinitionId": "<policy-definition-id-for-deploy-appgw-diagnostics>",
+      "parameters": {
+        "effect": { "value": "DeployIfNotExists" },
+        "logAnalyticsWorkspaceId": { "value": "[parameters('logAnalyticsWorkspaceId')]" }
+      }
+    },
+    {
+      "policyDefinitionReferenceId": "AuditApimDiagnostics",
+      "policyDefinitionId": "<policy-definition-id-for-audit-apim-diagnostics>",
+      "parameters": {
+        "effect": { "value": "AuditIfNotExists" }
+      }
+    }
+  ]
+}

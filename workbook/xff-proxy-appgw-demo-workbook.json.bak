@@ -1,0 +1,300 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# XFF Demo — Proxy (VIP) → App Gateway → App Service\n\nThis workbook demonstrates the **X-Forwarded-For (XFF) problem** when a proxy/VIP sits in front of Application Gateway.\n\n**Architecture:** `Client → Proxy (VIP) → Application Gateway → App Service`\n\n| Log Table | IP Field | Shows | Real Client IP? |\n|-----------|----------|-------|-----------------|\n| `AzureDiagnostics` (App GW) | `clientIP_s` | Proxy VIP IP | **No** |\n| `AppServiceHTTPLogs` | `CIp` | App Gateway IP | **No** |\n| `Application Insights` | `customDimensions[\"X-Forwarded-For\"]` | Full XFF chain | **Yes** (first IP in chain) |\n\n---"
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "time-range",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 1800000 },
+                { "durationMs": 3600000 },
+                { "durationMs": 14400000 },
+                { "durationMs": 43200000 },
+                { "durationMs": 86400000, "isInitialTime": true },
+                { "durationMs": 604800000 }
+              ]
+            },
+            "label": "Time Range"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 💰 Estimated Cost — Deployed Test Resources\n\n| Resource | SKU | Est. Daily Cost | Est. Monthly Cost |\n|---|---|---|---|\n| **Application Gateway v2** (Standard_v2, 1 instance) | Standard_v2 | ~$6.10 | ~$183 |\n| **App Service Plan** (F1 Free) | F1 | $0 | $0 |\n| **Azure Container Instance** (1 vCPU, 1.5 GB) | — | ~$1.30 | ~$39 |\n| **Log Analytics** (PerGB2018, pay-per-GB) | PerGB2018 | ~$0.10* | ~$3* |\n| **Application Insights** (workspace-based) | — | ~$0.05* | ~$1.50* |\n| **Public IPs** (2x Standard Static) | Standard | ~$0.24 | ~$7.20 |\n| **VNet** | — | $0 | $0 |\n| **Total (estimated)** | | **~$7.79/day** | **~$233/month** |\n\n> \\* Log Analytics & App Insights cost depends on data volume. First 5GB/month free.\n> \n> ⚠️ **The App Gateway is ~79% of the cost.** Delete the resource group when testing is complete.\n> \n> 📌 Delete command: `az group delete -n rg-xff-test-eastus --yes --no-wait`"
+      },
+      "name": "cost-estimate"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 1. App Gateway — What Does `clientIP_s` Show?\n\n> **Key Point:** `clientIP_s` always shows the **TCP peer IP** — which is the Proxy VIP, not the real end user."
+      },
+      "name": "section-appgw"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where TimeGenerated {TimeRange}\n| where ResourceType == 'APPLICATIONGATEWAYS'\n| summarize RequestCount = count() by clientIP_s\n| order by RequestCount desc\n| extend Label = case(\n    clientIP_s == '4.174.181.251', strcat(clientIP_s, ' ← PROXY VIP'),\n    clientIP_s == '4.205.85.213', strcat(clientIP_s, ' ← SELF (health probe)'),\n    strcat(clientIP_s, ' ← Direct caller / scanner'))\n| project Label, RequestCount",
+        "size": 0,
+        "title": "App Gateway — ClientIP Breakdown (clientIP_s = TCP peer, NOT real client)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Label",
+              "formatter": 0,
+              "formatOptions": { "customColumnWidthSetting": "60%" }
+            },
+            {
+              "columnMatch": "RequestCount",
+              "formatter": 4,
+              "formatOptions": { "palette": "blue" }
+            }
+          ]
+        }
+      },
+      "name": "appgw-client-ips"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where TimeGenerated {TimeRange}\n| where ResourceType == 'APPLICATIONGATEWAYS'\n| summarize RequestCount = count() by bin(TimeGenerated, 5m), Source = case(\n    clientIP_s == '4.174.181.251', 'Via Proxy (VIP)',\n    clientIP_s == '4.205.85.213', 'Self (Health Probe)',\n    'Direct / External'\n)\n| render timechart",
+        "size": 0,
+        "title": "App Gateway — Traffic by Source Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "appgw-traffic-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where TimeGenerated {TimeRange}\n| where ResourceType == 'APPLICATIONGATEWAYS'\n| where userAgent_s has 'PowerShell'\n| project TimeGenerated, clientIP_s, requestUri_s, httpStatus_d, userAgent_s\n| extend Source = case(\n    clientIP_s == '4.174.181.251', '🔶 Proxy VIP',\n    '🟢 Direct (your real IP)'\n)\n| project TimeGenerated, Source, clientIP_s, httpStatus_d, requestUri_s\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "App Gateway — Test Requests (PowerShell) — Compare Direct vs Proxied",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "appgw-test-requests"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 2. App Service — What Does `CIp` Show?\n\n> **Key Point:** `AppServiceHTTPLogs.CIp` always shows the **App Gateway IP**, not the real client. This is the behavior the user reported."
+      },
+      "name": "section-appsvc"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppServiceHTTPLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count() by CIp\n| order by RequestCount desc\n| extend Label = case(\n    CIp == '4.205.85.213', strcat(CIp, ' ← APP GATEWAY IP (not real client!)'),\n    strcat(CIp, ' ← Direct caller'))\n| project Label, RequestCount",
+        "size": 0,
+        "title": "App Service — CIp Breakdown (CIp = App Gateway IP, NOT real client)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Label",
+              "formatter": 0,
+              "formatOptions": { "customColumnWidthSetting": "65%" }
+            },
+            {
+              "columnMatch": "RequestCount",
+              "formatter": 4,
+              "formatOptions": { "palette": "orange" }
+            }
+          ]
+        }
+      },
+      "name": "appsvc-cip"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppServiceHTTPLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count() by bin(TimeGenerated, 5m), ScStatus = tostring(ScStatus)\n| render timechart",
+        "size": 0,
+        "title": "App Service — HTTP Traffic by Status Code",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "appsvc-traffic-status"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 3. Side-by-Side — What Each Tier Sees\n\n> This is the **key demo visual**. Same requests, different IPs at each tier."
+      },
+      "name": "section-comparison"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let agw = AzureDiagnostics\n| where TimeGenerated {TimeRange}\n| where ResourceType == 'APPLICATIONGATEWAYS'\n| summarize Count = count() by IP = clientIP_s\n| extend Tier = 'App Gateway (clientIP_s)', Note = case(\n    IP == '4.174.181.251', 'Proxy VIP ← NOT real client',\n    IP == '4.205.85.213', 'Self (health probe)',\n    'Direct caller');\nlet appsvc = AppServiceHTTPLogs\n| where TimeGenerated {TimeRange}\n| summarize Count = count() by IP = CIp\n| extend Tier = 'App Service (CIp)', Note = case(\n    IP == '4.205.85.213', 'App GW IP ← NOT real client',\n    'Direct caller');\nunion agw, appsvc\n| project Tier, IP, Count, Note\n| order by Tier asc, Count desc",
+        "size": 0,
+        "title": "Cross-Tier IP Comparison — Same Requests, Different IPs",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Note",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  { "operator": "contains", "thresholdValue": "NOT real client", "representation": "redBright", "text": "{0}" },
+                  { "operator": "contains", "thresholdValue": "Direct", "representation": "green", "text": "{0}" },
+                  { "operator": "Default", "representation": "gray", "text": "{0}" }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 4,
+              "formatOptions": { "palette": "blue" }
+            }
+          ]
+        }
+      },
+      "name": "cross-tier-comparison"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 4. The Solution — Where to Find the Real Client IP\n\n> When `ForwardedHeadersMiddleware` + `XffTelemetryInitializer` are deployed, the real client IP appears in **Application Insights `customDimensions[\"X-Forwarded-For\"]`**."
+      },
+      "name": "section-solution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| extend xff = tostring(customDimensions[\"X-Forwarded-For\"])\n| extend resolvedIp = tostring(customDimensions[\"ResolvedClientIp\"])\n| where isnotempty(xff)\n| extend OriginalClientIp = trim(' ', tostring(split(xff, ',')[0]))\n| project timestamp, OriginalClientIp, FullXffChain = xff, ResolvedByMiddleware = resolvedIp, AppInsightsClientIP = client_IP, name\n| order by timestamp desc",
+        "size": 0,
+        "title": "Application Insights — Real Client IP from XFF (requires middleware)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "OriginalClientIp",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  { "operator": "isNotNull", "representation": "green", "text": "{0} ✓ Real Client" }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "app-insights-xff"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| extend xff = tostring(customDimensions[\"X-Forwarded-For\"])\n| summarize\n    TotalRequests = count(),\n    WithXFF = countif(isnotempty(xff)),\n    WithoutXFF = countif(isempty(xff))\n| extend XffCoveragePct = iff(TotalRequests > 0, round(100.0 * WithXFF / TotalRequests, 1), 0.0)\n| project TotalRequests, WithXFF, WithoutXFF, XffCoveragePct",
+        "size": 0,
+        "title": "XFF Coverage — % of Requests with X-Forwarded-For in App Insights",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true
+        }
+      },
+      "name": "xff-coverage-tiles"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 5. Data Ingestion Volume (for Cost Monitoring)\n\n> Monitor how much log data is being ingested to estimate Log Analytics costs."
+      },
+      "name": "section-ingestion"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Usage\n| where TimeGenerated {TimeRange}\n| where IsBillable == true\n| summarize DataIngested_MB = round(sum(Quantity), 2) by DataType\n| order by DataIngested_MB desc",
+        "size": 0,
+        "title": "Billable Data Ingestion by Table (MB)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "DataIngested_MB",
+              "formatter": 4,
+              "formatOptions": { "palette": "turquoise" }
+            }
+          ]
+        }
+      },
+      "name": "data-ingestion-by-table"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Usage\n| where TimeGenerated {TimeRange}\n| where IsBillable == true\n| summarize DailyIngestion_MB = round(sum(Quantity), 2) by bin(TimeGenerated, 1d)\n| extend EstDailyCost_USD = round(DailyIngestion_MB / 1024.0 * 2.76, 2)\n| render barchart",
+        "size": 0,
+        "title": "Daily Billable Ingestion (MB) — Est. Cost at $2.76/GB",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "name": "daily-ingestion-cost"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 6. Summary — Proof of Issue\n\n| Finding | Evidence |\n|---------|----------|\n| **App Gateway `clientIP_s`** shows Proxy VIP, not real client | See Section 1 — IP `4.174.181.251` is the ACI proxy |\n| **App Service `CIp`** shows App Gateway IP, not real client | See Section 2 — IP `4.205.85.213` is the App GW |\n| **Real client IP** only available in `X-Forwarded-For` header | See Section 4 — requires ForwardedHeaders middleware |\n\n### Fix Steps\n1. **Proxy (VIP):** Must set `X-Forwarded-For` header (Nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`)\n2. **App Gateway:** Deploy XFF rewrite rule with `{var_add_x_forwarded_for_proxy}` to strip `:port`\n3. **App Service:** Deploy `ForwardedHeadersMiddleware` + `XffTelemetryInitializer` to capture XFF in App Insights\n\n> ⚠️ **Clean up when done:** `az group delete -n rg-xff-test-eastus --yes --no-wait`"
+      },
+      "name": "summary"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

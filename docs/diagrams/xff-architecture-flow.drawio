@@ -1,0 +1,116 @@
+<mxfile host="app.diagrams.net" modified="2026-04-03" agent="copilot" version="24.0.0" type="device">
+  <diagram id="xff-arch-flow" name="XFF Architecture Flow">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title1" value="&lt;b&gt;Proxy (VIP) → Application Gateway → App Service — XFF Header Flow&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="280" y="20" width="560" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Client -->
+        <mxCell id="client" value="&lt;b&gt;Client&lt;/b&gt;&lt;br&gt;203.0.113.50" style="shape=mxgraph.azure.user;fillColor=#0078D4;fontColor=#FFFFFF;strokeColor=#005A9E;fontSize=11;verticalLabelPosition=bottom;verticalAlign=top;fontStyle=0;labelBackgroundColor=none;" vertex="1" parent="1">
+          <mxGeometry x="60" y="180" width="50" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Proxy (VIP) -->
+        <mxCell id="proxy" value="&lt;b&gt;Proxy (VIP)&lt;/b&gt;&lt;br&gt;Nginx on ACI&lt;br&gt;&lt;font color=&quot;#666666&quot;&gt;IP: 4.174.181.251&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F25022;fontColor=#FFFFFF;strokeColor=#C43E1C;fontSize=11;arcSize=20;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="170" width="140" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- Application Gateway -->
+        <mxCell id="appgw" value="&lt;b&gt;Application Gateway&lt;/b&gt;&lt;br&gt;Basic SKU&lt;br&gt;&lt;font color=&quot;#E6E6E6&quot;&gt;IP: 4.205.85.213&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0078D4;fontColor=#FFFFFF;strokeColor=#005A9E;fontSize=11;arcSize=20;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="170" width="160" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- App Service -->
+        <mxCell id="appsvc" value="&lt;b&gt;App Service&lt;/b&gt;&lt;br&gt;Linux / .NET 8&lt;br&gt;&lt;font color=&quot;#E6E6E6&quot;&gt;F1 Free Tier&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7FBA00;fontColor=#FFFFFF;strokeColor=#5E8C00;fontSize=11;arcSize=20;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="680" y="170" width="140" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrows between services -->
+        <mxCell id="arrow1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#333333;strokeWidth=2;fontSize=10;" edge="1" source="client" target="proxy" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#333333;strokeWidth=2;fontSize=10;" edge="1" source="proxy" target="appgw" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#333333;strokeWidth=2;fontSize=10;" edge="1" source="appgw" target="appsvc" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- XFF Header boxes below -->
+        <mxCell id="xffTitle" value="&lt;b&gt;X-Forwarded-For Header at Each Hop&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=13;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="280" y="300" width="300" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="xff0" value="&lt;b&gt;Before Proxy&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#999999&quot;&gt;XFF: (none)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=10;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="340" width="120" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="xff1" value="&lt;b&gt;After Proxy&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#E65100&quot;&gt;XFF: 203.0.113.50&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=10;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="230" y="340" width="150" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="xff2" value="&lt;b&gt;After App Gateway&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#E65100&quot;&gt;XFF: 203.0.113.50, 4.172.218.37&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=10;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="430" y="340" width="220" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="xff3" value="&lt;b&gt;At App Service&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#E65100&quot;&gt;XFF: 203.0.113.50, 4.172.218.37&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#999999&quot;&gt;(available via middleware)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=10;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="700" y="330" width="220" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Dotted arrows for XFF flow -->
+        <mxCell id="xffa1" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#FF9800;strokeWidth=1;dashed=1;" edge="1" source="xff0" target="xff1" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="xffa2" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#FF9800;strokeWidth=1;dashed=1;" edge="1" source="xff1" target="xff2" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="xffa3" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#FF9800;strokeWidth=1;dashed=1;" edge="1" source="xff2" target="xff3" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- THE PROBLEM section -->
+        <mxCell id="probTitle" value="&lt;b&gt;⚠️ THE PROBLEM — What Native Logs Capture&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=13;fontColor=#D32F2F;" vertex="1" parent="1">
+          <mxGeometry x="280" y="430" width="350" height="25" as="geometry"/>
+        </mxCell>
+
+        <!-- App GW log problem -->
+        <mxCell id="prob1" value="&lt;b&gt;AGWAccessLogs.ClientIp&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#D32F2F&quot;&gt;= 4.172.218.37 (Proxy IP)&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#999999&quot;&gt;NOT the real client IP&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#D32F2F;fontSize=10;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="200" y="465" width="200" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- App Service log problem -->
+        <mxCell id="prob2" value="&lt;b&gt;AppServiceHTTPLogs.CIp&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#D32F2F&quot;&gt;= 4.205.85.213 (AppGW IP)&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#999999&quot;&gt;NOT the real client IP&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#D32F2F;fontSize=10;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="460" y="465" width="210" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- THE SOLUTION section -->
+        <mxCell id="solTitle" value="&lt;b&gt;✅ THE SOLUTION — Application Insights + Middleware&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=13;fontColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="280" y="555" width="400" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="sol1" value="&lt;b&gt;App Insights: requests table&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#2E7D32&quot;&gt;customDimensions[&amp;quot;X-Forwarded-For&amp;quot;]&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#2E7D32&quot;&gt;= 203.0.113.50 (Real Client!) ✅&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;fontSize=10;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="280" y="590" width="300" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Rewrite rule box -->
+        <mxCell id="rewrite" value="&lt;b&gt;Rewrite Rule&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#1565C0&quot;&gt;{var_add_x_forwarded_for_proxy}&lt;/font&gt;&lt;br&gt;Normalizes XFF (strips :port)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;fontSize=9;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="445" y="95" width="180" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="rewriteArrow" style="strokeColor=#1565C0;strokeWidth=1;dashed=1;endArrow=block;" edge="1" source="rewrite" target="appgw" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Middleware box -->
+        <mxCell id="middleware" value="&lt;b&gt;ForwardedHeaders&lt;/b&gt;&lt;br&gt;&lt;b&gt;Middleware&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#33691E&quot;&gt;+ XffTelemetryInitializer&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#33691E;fontSize=9;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="700" y="90" width="150" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="mwArrow" style="strokeColor=#33691E;strokeWidth=1;dashed=1;endArrow=block;" edge="1" source="middleware" target="appsvc" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

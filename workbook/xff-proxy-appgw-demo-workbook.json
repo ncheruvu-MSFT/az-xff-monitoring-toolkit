@@ -1,0 +1,478 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# XFF Demo — Proxy (VIP) → App Gateway → APIM → App Service\n\nThis workbook demonstrates the **X-Forwarded-For (XFF) problem** when a proxy/VIP sits in front of Application Gateway and API Management.\n\n**Architecture:** `Client → Proxy (VIP) → Application Gateway → APIM → App Service`\n\n| Log Table | IP Field | Shows | Real Client IP? |\n|-----------|----------|-------|-----------------|\n| `AzureDiagnostics` (App GW) | `clientIP_s` | Proxy VIP IP | **No** |\n| `ApiManagementGatewayLogs` | `CallerIpAddress` | App GW IP or Proxy IP | **No** |\n| `AppServiceHTTPLogs` | `CIp` | App Gateway / APIM IP | **No** |\n| `Application Insights` | `customDimensions[\"X-Forwarded-For\"]` | Full XFF chain | **Yes** (first IP in chain) |\n\n---"
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "time-range",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 1800000 },
+                { "durationMs": 3600000 },
+                { "durationMs": 14400000 },
+                { "durationMs": 43200000 },
+                { "durationMs": 86400000, "isInitialTime": true },
+                { "durationMs": 604800000 }
+              ]
+            },
+            "label": "Time Range"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "workspace-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "type": 5,
+            "isRequired": true,
+            "multiSelect": false,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": ["value::1"]
+            },
+            "defaultValue": "value::1",
+            "value": "/subscriptions/64e1939f-6460-4656-ad75-dcc277b155f1/resourceGroups/rg-xff-test-eastus/providers/Microsoft.OperationalInsights/workspaces/log-xff-test-cg4l2wl4myrww",
+            "label": "Log Analytics Workspace"
+          },
+          {
+            "id": "appinsights-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "AppInsights",
+            "type": 5,
+            "isRequired": true,
+            "multiSelect": false,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.insights/components": true
+              },
+              "additionalResourceOptions": ["value::1"]
+            },
+            "defaultValue": "value::1",
+            "value": "/subscriptions/64e1939f-6460-4656-ad75-dcc277b155f1/resourceGroups/rg-xff-test-eastus/providers/Microsoft.Insights/components/ai-xff-test-cg4l2wl4myrww",
+            "label": "Application Insights"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0
+      },
+      "name": "resource-parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 1. App Gateway — What Does `clientIP_s` Show?\n\n> **Key Point:** `clientIP_s` always shows the **TCP peer IP** — which is the Proxy VIP, not the real end user."
+      },
+      "name": "section-appgw"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where TimeGenerated {TimeRange}\n| where ResourceType == 'APPLICATIONGATEWAYS'\n| summarize RequestCount = count() by clientIP_s\n| order by RequestCount desc\n| extend Label = case(\n    clientIP_s == '4.174.181.251', strcat(clientIP_s, ' ← PROXY VIP'),\n    clientIP_s == '4.205.85.213', strcat(clientIP_s, ' ← SELF (health probe)'),\n    strcat(clientIP_s, ' ← Direct caller / scanner'))\n| project Label, RequestCount",
+        "size": 0,
+        "title": "App Gateway — ClientIP Breakdown (clientIP_s = TCP peer, NOT real client)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Label",
+              "formatter": 0,
+              "formatOptions": { "customColumnWidthSetting": "60%" }
+            },
+            {
+              "columnMatch": "RequestCount",
+              "formatter": 4,
+              "formatOptions": { "palette": "blue" }
+            }
+          ]
+        }
+      },
+      "name": "appgw-client-ips"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where TimeGenerated {TimeRange}\n| where ResourceType == 'APPLICATIONGATEWAYS'\n| summarize RequestCount = count() by bin(TimeGenerated, 5m), Source = case(\n    clientIP_s == '4.174.181.251', 'Via Proxy (VIP)',\n    clientIP_s == '4.205.85.213', 'Self (Health Probe)',\n    'Direct / External'\n)\n| render timechart",
+        "size": 0,
+        "title": "App Gateway — Traffic by Source Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "timechart"
+      },
+      "name": "appgw-traffic-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where TimeGenerated {TimeRange}\n| where ResourceType == 'APPLICATIONGATEWAYS'\n| where userAgent_s has 'PowerShell'\n| project TimeGenerated, clientIP_s, requestUri_s, httpStatus_d, userAgent_s\n| extend Source = case(\n    clientIP_s == '4.174.181.251', '🔶 Proxy VIP',\n    '🟢 Direct (your real IP)'\n)\n| project TimeGenerated, Source, clientIP_s, httpStatus_d, requestUri_s\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "App Gateway — Test Requests (PowerShell) — Compare Direct vs Proxied",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "table"
+      },
+      "name": "appgw-test-requests"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 2. App Service — What Does `CIp` Show?\n\n> **Key Point:** `AppServiceHTTPLogs.CIp` always shows the **App Gateway IP**, not the real client. This is the behavior the user reported."
+      },
+      "name": "section-appsvc"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppServiceHTTPLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count() by CIp\n| order by RequestCount desc\n| extend Label = case(\n    CIp == '4.205.85.213', strcat(CIp, ' ← APP GATEWAY IP (not real client!)'),\n    strcat(CIp, ' ← Direct caller'))\n| project Label, RequestCount",
+        "size": 0,
+        "title": "App Service — CIp Breakdown (CIp = App Gateway IP, NOT real client)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Label",
+              "formatter": 0,
+              "formatOptions": { "customColumnWidthSetting": "65%" }
+            },
+            {
+              "columnMatch": "RequestCount",
+              "formatter": 4,
+              "formatOptions": { "palette": "orange" }
+            }
+          ]
+        }
+      },
+      "name": "appsvc-cip"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppServiceHTTPLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count() by bin(TimeGenerated, 5m), ScStatus = tostring(ScStatus)\n| render timechart",
+        "size": 0,
+        "title": "App Service — HTTP Traffic by Status Code",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "timechart"
+      },
+      "name": "appsvc-traffic-status"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 3. APIM — What Does `CallerIpAddress` Show?\n\n> **Key Point:** `ApiManagementGatewayLogs.CallerIpAddress` shows the **TCP peer IP** — which is the App Gateway or Proxy IP, not the real end user. XFF headers must be inspected to find the real client."
+      },
+      "name": "section-apim"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ApiManagementGatewayLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count() by CallerIpAddress\n| order by RequestCount desc\n| extend Label = case(\n    CallerIpAddress == '4.174.181.251', strcat(CallerIpAddress, ' ← PROXY VIP'),\n    CallerIpAddress == '4.205.85.213', strcat(CallerIpAddress, ' ← APP GATEWAY'),\n    strcat(CallerIpAddress, ' ← Direct caller'))\n| project Label, RequestCount",
+        "size": 0,
+        "title": "APIM — CallerIpAddress Breakdown (TCP peer, NOT real client)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Label",
+              "formatter": 0,
+              "formatOptions": { "customColumnWidthSetting": "60%" }
+            },
+            {
+              "columnMatch": "RequestCount",
+              "formatter": 4,
+              "formatOptions": { "palette": "purple" }
+            }
+          ]
+        }
+      },
+      "name": "apim-client-ips"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ApiManagementGatewayLogs\n| where TimeGenerated {TimeRange}\n| where isnotempty(RequestHeaders)\n| extend headers = parse_json(RequestHeaders)\n| extend xff = tostring(headers[\"X-Forwarded-For\"])\n| extend OriginalClientIp = trim(' ', tostring(split(xff, ',')[0]))\n| project TimeGenerated, CallerIpAddress, XffHeader = xff, OriginalClientIp, Method, Url, ResponseCode, ApiId\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "APIM — Requests with XFF Header (real client IP extraction)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "OriginalClientIp",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  { "operator": "isNotNull", "representation": "green", "text": "{0} ✓ Real Client" }
+                ]
+              }
+            },
+            {
+              "columnMatch": "CallerIpAddress",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  { "operator": "Default", "representation": "orange", "text": "{0} (TCP peer)" }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "apim-xff-requests"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ApiManagementGatewayLogs\n| where TimeGenerated {TimeRange}\n| summarize RequestCount = count() by bin(TimeGenerated, 5m), ApiId\n| render timechart",
+        "size": 0,
+        "title": "APIM — Request Volume Over Time by API",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "timechart"
+      },
+      "name": "apim-traffic-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppRequests\n| where TimeGenerated {TimeRange}\n| where AppRoleName has 'apim' or SDKVersion has 'apim' or Properties has 'apim'\n| extend xff = tostring(Properties[\"Request-Header-x-forwarded-for\"])\n| summarize\n    TotalRequests = count(),\n    WithXFF = countif(isnotempty(xff)),\n    WithoutXFF = countif(isempty(xff))\n| extend XffPresencePct = iff(TotalRequests > 0, round(100.0 * WithXFF / TotalRequests, 2), 0.0)\n| project TotalRequests, WithXFF, WithoutXFF, XffPresencePct",
+        "size": 0,
+        "title": "APIM — XFF Presence Rate via App Insights",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": { "columnMatch": "XffPresencePct", "formatter": 1 },
+          "leftContent": { "columnMatch": "TotalRequests", "formatter": 12 }
+        }
+      },
+      "name": "apim-xff-rate"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 4. Side-by-Side — What Each Tier Sees\n\n> This is the **key demo visual**. Same requests, different IPs at each tier."
+      },
+      "name": "section-comparison"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let agw = AzureDiagnostics\n| where TimeGenerated {TimeRange}\n| where ResourceType == 'APPLICATIONGATEWAYS'\n| summarize Count = count() by IP = clientIP_s\n| extend Tier = 'App Gateway (clientIP_s)', Note = case(\n    IP == '4.174.181.251', 'Proxy VIP \u2190 NOT real client',\n    IP == '4.205.85.213', 'Self (health probe)',\n    'Direct caller');\nlet apim = ApiManagementGatewayLogs\n| where TimeGenerated {TimeRange}\n| summarize Count = count() by IP = CallerIpAddress\n| extend Tier = 'APIM (CallerIpAddress)', Note = case(\n    IP == '4.174.181.251', 'Proxy VIP \u2190 NOT real client',\n    IP == '4.205.85.213', 'App GW IP \u2190 NOT real client',\n    'Direct caller');\nlet appsvc = AppServiceHTTPLogs\n| where TimeGenerated {TimeRange}\n| summarize Count = count() by IP = CIp\n| extend Tier = 'App Service (CIp)', Note = case(\n    IP == '4.205.85.213', 'App GW IP \u2190 NOT real client',\n    'Direct caller');\nunion agw, apim, appsvc\n| project Tier, IP, Count, Note\n| order by Tier asc, Count desc",
+        "size": 0,
+        "title": "Cross-Tier IP Comparison — Same Requests, Different IPs",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Note",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  { "operator": "contains", "thresholdValue": "NOT real client", "representation": "redBright", "text": "{0}" },
+                  { "operator": "contains", "thresholdValue": "Direct", "representation": "green", "text": "{0}" },
+                  { "operator": "Default", "representation": "gray", "text": "{0}" }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 4,
+              "formatOptions": { "palette": "blue" }
+            }
+          ]
+        }
+      },
+      "name": "cross-tier-comparison"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 5. The Solution \u2014 Where to Find the Real Client IP\n\n> When `ForwardedHeadersMiddleware` + `XffTelemetryInitializer` are deployed, the real client IP appears in **Application Insights `customDimensions[\"X-Forwarded-For\"]`**.\n> \n> For APIM, configure **Diagnostics Settings** to log `X-Forwarded-For` in `Headers to log` and inspect `ApiManagementGatewayLogs.RequestHeaders`."
+      },
+      "name": "section-solution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppRequests\n| where TimeGenerated {TimeRange}\n| extend xff = tostring(Properties[\"X-Forwarded-For\"])\n| extend resolvedIp = tostring(Properties[\"ResolvedClientIp\"])\n| where isnotempty(xff)\n| extend OriginalClientIp = trim(' ', tostring(split(xff, ',')[0]))\n| project TimeGenerated, OriginalClientIp, FullXffChain = xff, ResolvedByMiddleware = resolvedIp, AppInsightsClientIP = ClientIP, Name\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Application Insights — Real Client IP from XFF (requires middleware)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "OriginalClientIp",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  { "operator": "isNotNull", "representation": "green", "text": "{0} ✓ Real Client" }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "app-insights-xff"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppRequests\n| where TimeGenerated {TimeRange}\n| extend xff = tostring(Properties[\"X-Forwarded-For\"])\n| summarize\n    TotalRequests = count(),\n    WithXFF = countif(isnotempty(xff)),\n    WithoutXFF = countif(isempty(xff))\n| extend XffCoveragePct = iff(TotalRequests > 0, round(100.0 * WithXFF / TotalRequests, 1), 0.0)\n| project TotalRequests, WithXFF, WithoutXFF, XffCoveragePct",
+        "size": 0,
+        "title": "XFF Coverage — % of Requests with X-Forwarded-For in App Insights",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": {
+            "columnMatch": "TotalRequests",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "subtitleContent": {
+            "columnMatch": "WithXFF"
+          },
+          "leftContent": {
+            "columnMatch": "XffCoveragePct",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "greenRed",
+              "min": 0,
+              "max": 100
+            },
+            "numberFormat": {
+              "unit": 1,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 1
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "WithoutXFF",
+            "formatter": 1
+          }
+        }
+      },
+      "name": "xff-coverage-tiles"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 6. Custom Dimensions Explorer\n\n> Explore all available custom dimensions in Application Insights requests to discover XFF-related telemetry."
+      },
+      "name": "section-custom-dimensions"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppRequests\n| where TimeGenerated {TimeRange}\n| project Properties\n| mv-apply kv = bag_keys(Properties) on (\n    extend Key = tostring(kv), Value = tostring(Properties[tostring(kv)])\n)\n| where Key has_any ('forward', 'xff', 'client', 'ip', 'x-forwarded', 'Request-Header', 'Resolved')\n| summarize SampleValue = take_any(Value), Count = count() by Key\n| order by Count desc",
+        "size": 0,
+        "title": "Custom Dimensions — XFF & IP-Related Keys Found in App Insights",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "table"
+      },
+      "name": "custom-dimensions-xff-keys"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppRequests\n| where TimeGenerated {TimeRange}\n| project Properties\n| mv-apply kv = bag_keys(Properties) on (\n    extend Key = tostring(kv)\n)\n| summarize Count = count() by Key\n| order by Count desc\n| take 30",
+        "size": 0,
+        "title": "All Custom Dimension Keys (Top 30)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["{Workspace}"],
+        "visualization": "table"
+      },
+      "name": "all-custom-dimensions"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## 7. Summary — Proof of Issue\n\n| Finding | Evidence |\n|---------|----------|\n| **App Gateway `clientIP_s`** shows Proxy VIP, not real client | See Section 1 — IP `4.174.181.251` is the ACI proxy |\n| **APIM `CallerIpAddress`** shows App GW or Proxy IP, not real client | See Section 3 — XFF header must be inspected |\n| **App Service `CIp`** shows App Gateway IP, not real client | See Section 2 — IP `4.205.85.213` is the App GW |\n| **Real client IP** only available in `X-Forwarded-For` header | See Section 5 — requires ForwardedHeaders middleware |\n\n### Fix Steps\n1. **Proxy (VIP):** Must set `X-Forwarded-For` header (Nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`)\n2. **App Gateway:** Deploy XFF rewrite rule with `{var_add_x_forwarded_for_proxy}` to strip `:port`\n3. **APIM:** Configure diagnostic settings to log `X-Forwarded-For` header; use policy to forward XFF to backend\n4. **App Service:** Deploy `ForwardedHeadersMiddleware` + `XffTelemetryInitializer` to capture XFF in App Insights\n\n> ⚠️ **Clean up when done:** `az group delete -n rg-xff-test-eastus --yes --no-wait`"
+      },
+      "name": "summary"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/64e1939f-6460-4656-ad75-dcc277b155f1/resourceGroups/rg-xff-test-eastus/providers/Microsoft.OperationalInsights/workspaces/log-xff-test-cg4l2wl4myrww",
+    "/subscriptions/64e1939f-6460-4656-ad75-dcc277b155f1/resourceGroups/rg-xff-test-eastus/providers/Microsoft.Insights/components/ai-xff-test-cg4l2wl4myrww"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

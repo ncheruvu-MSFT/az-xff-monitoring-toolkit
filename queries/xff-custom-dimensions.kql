@@ -1,0 +1,149 @@
+// ============================================================================
+// KQL Queries — Custom Dimensions & XFF Header Discovery
+// ============================================================================
+// Run these in Log Analytics workspace to explore custom dimensions
+// from Application Insights and APIM gateway logs.
+//
+// Workspace: log-xff-test-cg4l2wl4myrww
+// ============================================================================
+
+
+// ── 1. List ALL custom dimension keys in App Insights requests ──────────────
+// Discover what telemetry your middleware and APIM are logging.
+
+requests
+| where timestamp > ago(24h)
+| project customDimensions
+| mv-apply kv = bag_keys(customDimensions) on (
+    extend Key = tostring(kv)
+)
+| summarize Count = count() by Key
+| order by Count desc
+
+
+// ── 2. XFF-related custom dimensions only ───────────────────────────────────
+// Filter to keys related to forwarded headers, client IPs, and XFF.
+
+requests
+| where timestamp > ago(24h)
+| project customDimensions
+| mv-apply kv = bag_keys(customDimensions) on (
+    extend Key = tostring(kv),
+    Value = tostring(customDimensions[tostring(kv)])
+)
+| where Key has_any ('forward', 'xff', 'client', 'ip', 'x-forwarded', 'Request-Header', 'Resolved')
+| summarize SampleValue = take_any(Value), Occurrences = count() by Key
+| order by Occurrences desc
+
+
+// ── 3. Full custom dimensions dump — recent requests ────────────────────────
+// See ALL key-value pairs for recent requests to understand what's being captured.
+
+requests
+| where timestamp > ago(1h)
+| take 10
+| project timestamp, name, client_IP,
+    customDimensions = tostring(customDimensions)
+
+
+// ── 4. X-Forwarded-For from App Insights (App Service middleware) ────────────
+// Key: customDimensions["X-Forwarded-For"] — set by XffTelemetryInitializer
+
+requests
+| where timestamp > ago(24h)
+| extend xff = tostring(customDimensions["X-Forwarded-For"])
+| extend resolvedIp = tostring(customDimensions["ResolvedClientIp"])
+| project timestamp, name, client_IP, xff, resolvedIp, resultCode
+| order by timestamp desc
+
+
+// ── 5. X-Forwarded-For from App Insights (APIM header logging) ──────────────
+// Key: customDimensions["Request-Header-x-forwarded-for"] — set by APIM diagnostics
+
+requests
+| where timestamp > ago(24h)
+| extend xff = tostring(customDimensions["Request-Header-x-forwarded-for"])
+| where isnotempty(xff)
+| extend OriginalClientIp = trim(" ", tostring(split(xff, ",")[0]))
+| project timestamp, name, client_IP, xff, OriginalClientIp, resultCode
+| order by timestamp desc
+
+
+// ── 6. Compare both XFF custom dimension keys side-by-side ──────────────────
+// Some requests may have one or both keys depending on the source.
+
+requests
+| where timestamp > ago(24h)
+| extend xff_middleware = tostring(customDimensions["X-Forwarded-For"])
+| extend xff_apim = tostring(customDimensions["Request-Header-x-forwarded-for"])
+| extend resolvedIp = tostring(customDimensions["ResolvedClientIp"])
+| where isnotempty(xff_middleware) or isnotempty(xff_apim)
+| project timestamp, name, client_IP,
+    XFF_Middleware = xff_middleware,
+    XFF_APIM = xff_apim,
+    ResolvedClientIp = resolvedIp
+| order by timestamp desc
+
+
+// ── 7. APIM Gateway Logs — Extract XFF from RequestHeaders JSON ─────────────
+// ApiManagementGatewayLogs stores headers as JSON. Parse to find XFF.
+
+ApiManagementGatewayLogs
+| where TimeGenerated > ago(24h)
+| where isnotempty(RequestHeaders)
+| extend headers = parse_json(RequestHeaders)
+| extend xff = tostring(headers["X-Forwarded-For"])
+| extend OriginalClientIp = trim(" ", tostring(split(xff, ",")[0]))
+| project TimeGenerated, CallerIpAddress, xff, OriginalClientIp,
+    Method = RequestMethod, Url, ResponseCode, ApiId
+| order by TimeGenerated desc
+
+
+// ── 8. APIM — All request headers logged ────────────────────────────────────
+// See which headers APIM is capturing in diagnostic settings.
+
+ApiManagementGatewayLogs
+| where TimeGenerated > ago(24h)
+| where isnotempty(RequestHeaders)
+| extend headers = parse_json(RequestHeaders)
+| mv-apply key = bag_keys(headers) on (
+    extend HeaderName = tostring(key)
+)
+| summarize Count = count() by HeaderName
+| order by Count desc
+
+
+// ── 9. APIM — XFF presence rate ─────────────────────────────────────────────
+// What % of APIM requests have XFF header logged?
+
+ApiManagementGatewayLogs
+| where TimeGenerated > ago(24h)
+| extend headers = parse_json(RequestHeaders)
+| extend xff = tostring(headers["X-Forwarded-For"])
+| summarize
+    TotalRequests = count(),
+    WithXFF = countif(isnotempty(xff)),
+    WithoutXFF = countif(isempty(xff))
+| extend XffPct = iff(TotalRequests > 0, round(100.0 * WithXFF / TotalRequests, 2), 0.0)
+
+
+// ── 10. Cross-source custom dimensions comparison ───────────────────────────
+// Union App Insights + APIM logs to see XFF across all tiers.
+
+let ai_xff = requests
+| where timestamp > ago(24h)
+| extend xff = coalesce(
+    tostring(customDimensions["X-Forwarded-For"]),
+    tostring(customDimensions["Request-Header-x-forwarded-for"]))
+| where isnotempty(xff)
+| extend OriginalClientIp = trim(" ", tostring(split(xff, ",")[0]))
+| project TimeGenerated = timestamp, Source = "AppInsights", ReportedIP = client_IP, XFF = xff, OriginalClientIp;
+let apim_xff = ApiManagementGatewayLogs
+| where TimeGenerated > ago(24h)
+| extend headers = parse_json(RequestHeaders)
+| extend xff = tostring(headers["X-Forwarded-For"])
+| where isnotempty(xff)
+| extend OriginalClientIp = trim(" ", tostring(split(xff, ",")[0]))
+| project TimeGenerated, Source = "APIM", ReportedIP = CallerIpAddress, XFF = xff, OriginalClientIp;
+union ai_xff, apim_xff
+| order by TimeGenerated desc

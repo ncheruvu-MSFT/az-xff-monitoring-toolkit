@@ -1,0 +1,198 @@
+// ============================================================================
+// KQL Queries – Proxy (VIP) → App Gateway → App Service XFF Validation
+// ============================================================================
+// Run these in Log Analytics after executing the test scripts.
+// These queries help validate the XFF header flow at each tier.
+// ============================================================================
+
+
+// ── 1. App Gateway – What IP does ClientIp show? ────────────────────────────
+// EXPECTED: ClientIp = Proxy VIP IP (NOT the real client IP)
+// This is by design — AGWAccessLogs.ClientIp always shows the TCP peer.
+
+AGWAccessLogs
+| where TimeGenerated > ago(1h)
+| project
+    TimeGenerated,
+    ClientIp,          // <-- Will show Proxy VIP IP
+    Host,
+    RequestUri,
+    HttpStatusCode,
+    UserAgent
+| order by TimeGenerated desc
+
+
+// ── 2. App Gateway – Compare direct vs proxied requests ─────────────────────
+// Direct requests show your real IP; proxied requests show the Proxy VIP.
+// This confirms the proxy is in the path.
+
+AGWAccessLogs
+| where TimeGenerated > ago(1h)
+| summarize
+    RequestCount = count(),
+    SampleUri = take_any(RequestUri)
+    by ClientIp
+| order by RequestCount desc
+
+
+// ── 3. App Service HTTP Logs – What does CIp show? ──────────────────────────
+// EXPECTED: CIp = Application Gateway private IP (e.g., 10.1.2.x)
+// This is the TCP peer to App Service — always the App Gateway, not the client.
+
+AppServiceHTTPLogs
+| where TimeGenerated > ago(1h)
+| project
+    TimeGenerated,
+    CIp,               // <-- Will show App Gateway IP
+    CsHost,
+    CsUriStem,
+    ScStatus,
+    TimeTaken,
+    UserAgent
+| order by TimeGenerated desc
+
+
+// ── 4. App Insights – XFF header captured by middleware ─────────────────────
+// EXPECTED: xff = "<real-client-ip>, <proxy-vip-ip>"
+// This is where the REAL client IP lives after the proxy sets XFF.
+// REQUIRES: ForwardedHeadersMiddleware + XffTelemetryInitializer deployed.
+
+requests
+| where timestamp > ago(1h)
+| extend xff = tostring(customDimensions["X-Forwarded-For"])
+| extend resolvedClientIp = tostring(customDimensions["ResolvedClientIp"])
+| where isnotempty(xff)
+| project
+    timestamp,
+    name,
+    xff,                    // Full XFF chain: "<client-ip>, <proxy-ip>"
+    resolvedClientIp,       // What .NET resolved as the real client IP
+    client_IP,              // App Insights default (may still be App GW IP)
+    resultCode,
+    duration
+| order by timestamp desc
+
+
+// ── 5. Extract original client IP from XFF chain ────────────────────────────
+// Parses XFF to pull out the first (leftmost) IP = real client.
+
+requests
+| where timestamp > ago(1h)
+| extend xff = tostring(customDimensions["X-Forwarded-For"])
+| where isnotempty(xff)
+| extend originalClientIp = tostring(split(xff, ",")[0])
+| extend proxyVipIp = iif(array_length(split(xff, ",")) > 1,
+    tostring(split(xff, ",")[1]),
+    "")
+| project
+    timestamp,
+    originalClientIp = trim(" ", originalClientIp),
+    proxyVipIp = trim(" ", proxyVipIp),
+    xff,
+    name,
+    resultCode
+| order by timestamp desc
+
+
+// ── 6. Side-by-side comparison: all three tiers ─────────────────────────────
+// Correlates App Gateway ClientIp, App Service CIp, and App Insights XFF
+// to show what each tier sees for the same time window.
+
+let timeRange = ago(1h);
+let appGwData = AGWAccessLogs
+| where TimeGenerated > timeRange
+| summarize
+    AGW_RequestCount = count(),
+    AGW_UniqueClientIps = dcount(ClientIp),
+    AGW_ClientIps = make_set(ClientIp, 10)
+    by bin(TimeGenerated, 5m);
+let appSvcData = AppServiceHTTPLogs
+| where TimeGenerated > timeRange
+| summarize
+    AppSvc_RequestCount = count(),
+    AppSvc_UniqueCIps = dcount(CIp),
+    AppSvc_CIps = make_set(CIp, 10)
+    by bin(TimeGenerated, 5m);
+appGwData
+| join kind=fullouter appSvcData on TimeGenerated
+| project
+    TimeGenerated,
+    AGW_RequestCount,
+    AGW_ClientIps,           // Should show Proxy VIP IPs
+    AppSvc_RequestCount,
+    AppSvc_CIps              // Should show App Gateway IPs
+| order by TimeGenerated desc
+
+
+// ── 7. Detect if proxy is NOT setting XFF ───────────────────────────────────
+// If the proxy doesn't set XFF, the App Gateway will create a new XFF
+// with just the proxy IP. This query checks for single-IP XFF values
+// that match known proxy IPs — a sign XFF is not being set upstream.
+
+requests
+| where timestamp > ago(1h)
+| extend xff = tostring(customDimensions["X-Forwarded-For"])
+| where isnotempty(xff)
+| extend ipCount = array_length(split(xff, ","))
+| where ipCount == 1
+| summarize
+    SingleIpXffCount = count(),
+    SampleXff = take_any(xff)
+    by bin(timestamp, 5m)
+| order by timestamp desc
+
+
+// ── 8. Detect non-normalized XFF (contains :port) ──────────────────────────
+// If App Gateway rewrite rule is missing, XFF will contain :port suffixes.
+// Spikes in this query mean the rewrite rule is not applied.
+
+requests
+| where timestamp > ago(1h)
+| extend xff = tostring(customDimensions["X-Forwarded-For"])
+| where isnotempty(xff) and xff has ":"
+| summarize
+    MalformedCount = count()
+    by bin(timestamp, 5m)
+| order by timestamp asc
+
+
+// ── 9. Forged XFF detection ─────────────────────────────────────────────────
+// Detect requests where XFF chain has more IPs than expected for the
+// architecture (Proxy + AppGW = 2 IPs in XFF). More IPs may indicate
+// forged XFF from the client.
+
+requests
+| where timestamp > ago(1h)
+| extend xff = tostring(customDimensions["X-Forwarded-For"])
+| where isnotempty(xff)
+| extend ipCount = array_length(split(xff, ","))
+| where ipCount > 2  // Expected: 2 for Proxy → AppGW architecture
+| project
+    timestamp,
+    xff,
+    ipCount,
+    name,
+    client_IP
+| order by timestamp desc
+
+
+// ── 10. Test summary dashboard ──────────────────────────────────────────────
+// Quick view showing traffic distribution and IP mapping across tiers.
+
+AGWAccessLogs
+| where TimeGenerated > ago(1h)
+| summarize
+    TotalRequests = count(),
+    UniqueClientIps = dcount(ClientIp),
+    Top3IPs = make_set(ClientIp, 3)
+| extend Tier = "App Gateway", IpField = "ClientIp", Note = "Shows Proxy VIP IP"
+| union (
+    AppServiceHTTPLogs
+    | where TimeGenerated > ago(1h)
+    | summarize
+        TotalRequests = count(),
+        UniqueClientIps = dcount(CIp),
+        Top3IPs = make_set(CIp, 3)
+    | extend Tier = "App Service", IpField = "CIp", Note = "Shows App Gateway IP"
+)
+| project Tier, IpField, Note, TotalRequests, UniqueClientIps, Top3IPs

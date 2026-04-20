@@ -1,0 +1,191 @@
+<mxfile host="app.diagrams.net" modified="2026-04-03" agent="copilot" version="24.0.0" type="device">
+  <diagram id="xff-monitoring-flow" name="Monitoring Data Flow">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;XFF Monitoring — Where Data Is Captured &amp; How to Get Real Client IP&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="200" y="15" width="600" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- ═══ TOP: Infrastructure Layer ═══ -->
+        <mxCell id="infraBg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#E0E0E0;arcSize=5;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="920" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="infraLabel" value="&lt;b&gt;Infrastructure Layer&lt;/b&gt;" style="text;html=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="50" y="65" width="150" height="20" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="client" value="&lt;b&gt;Client&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#666&quot;&gt;203.0.x.x&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#424242;fontColor=#FFFFFF;strokeColor=#212121;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="100" width="90" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="proxy" value="&lt;b&gt;Proxy (VIP)&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#FFE0B2&quot;&gt;Nginx / ACI&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F25022;fontColor=#FFFFFF;strokeColor=#C43E1C;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="230" y="100" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="appgw" value="&lt;b&gt;App Gateway&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#BBDEFB&quot;&gt;Basic SKU&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0078D4;fontColor=#FFFFFF;strokeColor=#005A9E;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="100" width="130" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="appsvc" value="&lt;b&gt;App Service&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#DCEDC8&quot;&gt;.NET 8 / Linux&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7FBA00;fontColor=#FFFFFF;strokeColor=#5E8C00;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="100" width="130" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="appinsights_icon" value="&lt;b&gt;App Insights&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#E1BEE7&quot;&gt;SDK / Agent&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9C27B0;fontColor=#FFFFFF;strokeColor=#6A1B9A;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="100" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Arrows -->
+        <mxCell id="a1" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666;strokeWidth=2;" edge="1" source="client" target="proxy" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="a2" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666;strokeWidth=2;" edge="1" source="proxy" target="appgw" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="a3" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666;strokeWidth=2;" edge="1" source="appgw" target="appsvc" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="a4" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9C27B0;strokeWidth=1;dashed=1;" edge="1" source="appsvc" target="appinsights_icon" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ═══ MIDDLE: Log Analytics Workspace ═══ -->
+        <mxCell id="lawBg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;arcSize=5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="250" width="920" height="310" as="geometry"/>
+        </mxCell>
+        <mxCell id="lawLabel" value="&lt;b&gt;Log Analytics Workspace&lt;/b&gt;" style="text;html=1;fontSize=13;fontColor=#1565C0;" vertex="1" parent="1">
+          <mxGeometry x="365" y="255" width="250" height="25" as="geometry"/>
+        </mxCell>
+
+        <!-- Table 1: AzureDiagnostics -->
+        <mxCell id="table1bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D32F2F;arcSize=8;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="295" width="260" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="table1title" value="&lt;b&gt;AzureDiagnostics&lt;/b&gt; (App Gateway Logs)" style="text;html=1;fontSize=11;fontColor=#333;" vertex="1" parent="1">
+          <mxGeometry x="70" y="300" width="240" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="table1field" value="&lt;b&gt;clientIP_s&lt;/b&gt; = &lt;font color=&quot;#D32F2F&quot;&gt;&lt;b&gt;Proxy VIP IP&lt;/b&gt;&lt;/font&gt; ⚠️" style="text;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="325" width="220" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="table1note" value="TCP peer only — shows who&lt;br&gt;connected to App Gateway,&lt;br&gt;NOT the real end user" style="text;html=1;fontSize=9;fontColor=#999;" vertex="1" parent="1">
+          <mxGeometry x="80" y="350" width="200" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="table1status" value="&lt;font color=&quot;#D32F2F&quot;&gt;&lt;b&gt;❌ Real client IP NOT available&lt;/b&gt;&lt;/font&gt;" style="text;html=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="395" width="220" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Table 2: AppServiceHTTPLogs -->
+        <mxCell id="table2bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D32F2F;arcSize=8;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="360" y="295" width="260" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="table2title" value="&lt;b&gt;AppServiceHTTPLogs&lt;/b&gt; (App Service)" style="text;html=1;fontSize=11;fontColor=#333;" vertex="1" parent="1">
+          <mxGeometry x="370" y="300" width="240" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="table2field" value="&lt;b&gt;CIp&lt;/b&gt; = &lt;font color=&quot;#D32F2F&quot;&gt;&lt;b&gt;App Gateway IP&lt;/b&gt;&lt;/font&gt; ⚠️" style="text;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="380" y="325" width="220" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="table2note" value="TCP peer only — shows who&lt;br&gt;connected to App Service,&lt;br&gt;NOT the real end user" style="text;html=1;fontSize=9;fontColor=#999;" vertex="1" parent="1">
+          <mxGeometry x="380" y="350" width="200" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="table2status" value="&lt;font color=&quot;#D32F2F&quot;&gt;&lt;b&gt;❌ Real client IP NOT available&lt;/b&gt;&lt;/font&gt;" style="text;html=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="380" y="395" width="220" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Table 3: Application Insights (THE SOLUTION) -->
+        <mxCell id="table3bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2E7D32;arcSize=8;shadow=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="660" y="295" width="280" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="table3title" value="&lt;b&gt;Application Insights&lt;/b&gt; (requests table)" style="text;html=1;fontSize=11;fontColor=#333;" vertex="1" parent="1">
+          <mxGeometry x="670" y="300" width="260" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="table3field1" value="&lt;b&gt;customDimensions[&amp;quot;X-Forwarded-For&amp;quot;]&lt;/b&gt;" style="text;html=1;fontSize=10;fontColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="680" y="325" width="250" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="table3field2" value="= &lt;font color=&quot;#2E7D32&quot;&gt;&lt;b&gt;203.0.113.50 (Real Client!)&lt;/b&gt;&lt;/font&gt; ✅" style="text;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="345" width="250" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="table3note" value="Captured by ForwardedHeaders&lt;br&gt;middleware + XffTelemetry&lt;br&gt;Initializer in app code" style="text;html=1;fontSize=9;fontColor=#999;" vertex="1" parent="1">
+          <mxGeometry x="680" y="370" width="200" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="table3status" value="&lt;font color=&quot;#2E7D32&quot;&gt;&lt;b&gt;✅ Real client IP AVAILABLE&lt;/b&gt;&lt;/font&gt;" style="text;html=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="680" y="395" width="220" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Diagnostic Settings arrows -->
+        <mxCell id="diag1" value="Diagnostic&lt;br&gt;Settings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#0078D4;strokeWidth=1;dashed=1;fontSize=8;fontColor=#0078D4;verticalAlign=top;labelBackgroundColor=none;" edge="1" source="appgw" target="table1bg" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="diag2" value="Diagnostic&lt;br&gt;Settings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#7FBA00;strokeWidth=1;dashed=1;fontSize=8;fontColor=#7FBA00;verticalAlign=top;labelBackgroundColor=none;" edge="1" source="appsvc" target="table2bg" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="diag3" value="App Insights&lt;br&gt;SDK" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9C27B0;strokeWidth=2;dashed=0;fontSize=8;fontColor=#9C27B0;verticalAlign=top;labelBackgroundColor=none;" edge="1" source="appinsights_icon" target="table3bg" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ═══ BOTTOM: Required Configuration ═══ -->
+        <mxCell id="reqBg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#9C27B0;arcSize=5;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="600" width="920" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="reqLabel" value="&lt;b&gt;Required Configuration for Real Client IP&lt;/b&gt;" style="text;html=1;fontSize=13;fontColor=#6A1B9A;" vertex="1" parent="1">
+          <mxGeometry x="320" y="605" width="330" height="25" as="geometry"/>
+        </mxCell>
+
+        <!-- Step 1 -->
+        <mxCell id="step1" value="&lt;b&gt;① Proxy&lt;/b&gt;&lt;br&gt;&lt;br&gt;Set &lt;font color=&quot;#E65100&quot;&gt;X-Forwarded-For&lt;/font&gt;&lt;br&gt;header on outbound&lt;br&gt;requests&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#666&quot;&gt;Nginx: proxy_set_header&lt;br&gt;X-Forwarded-For&lt;br&gt;$proxy_add_x_forwarded_for&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F25022;fontSize=9;shadow=0;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="60" y="640" width="180" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- Step 2 -->
+        <mxCell id="step2" value="&lt;b&gt;② App Gateway&lt;/b&gt;&lt;br&gt;&lt;br&gt;Deploy &lt;font color=&quot;#1565C0&quot;&gt;Rewrite Rule&lt;/font&gt;&lt;br&gt;&lt;br&gt;Header: X-Forwarded-For&lt;br&gt;Value: &lt;font color=&quot;#1565C0&quot;&gt;{var_add_x_forwarded&lt;br&gt;_for_proxy}&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#666&quot;&gt;Strips non-standard :port&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;fontSize=9;shadow=0;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="270" y="640" width="180" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- Step 3 -->
+        <mxCell id="step3" value="&lt;b&gt;③ App Service&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#33691E&quot;&gt;ForwardedHeaders&lt;br&gt;Middleware&lt;/font&gt; (FIRST!)&lt;br&gt;&lt;br&gt;Trust KnownNetworks&lt;br&gt;ForwardLimit = null&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#666&quot;&gt;.NET / Python / Java&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7FBA00;fontSize=9;shadow=0;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="480" y="640" width="180" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- Step 4 -->
+        <mxCell id="step4" value="&lt;b&gt;④ Telemetry Initializer&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#6A1B9A&quot;&gt;XffTelemetryInitializer&lt;/font&gt;&lt;br&gt;&lt;br&gt;Captures XFF header&lt;br&gt;into App Insights&lt;br&gt;customDimensions&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#666&quot;&gt;Query via KQL&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9C27B0;fontSize=9;shadow=0;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="690" y="640" width="180" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- Step arrows -->
+        <mxCell id="sa1" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666;strokeWidth=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="step1" target="step2" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sa2" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666;strokeWidth=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="step2" target="step3" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sa3" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666;strokeWidth=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="step3" target="step4" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="&lt;font color=&quot;#D32F2F&quot;&gt;⚠️ Red border&lt;/font&gt; = TCP peer IP only (not real client)      &lt;font color=&quot;#2E7D32&quot;&gt;✅ Green border&lt;/font&gt; = Real client IP available (via middleware)" style="text;html=1;fontSize=10;fontColor=#666;align=center;" vertex="1" parent="1">
+          <mxGeometry x="150" y="455" width="680" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Retention box -->
+        <mxCell id="retBg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#F9A825;arcSize=5;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="490" width="880" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="retTitle" value="&lt;b&gt;📦 Log Retention &amp; Cost&lt;/b&gt;" style="text;html=1;fontSize=11;fontColor=#F57F17;" vertex="1" parent="1">
+          <mxGeometry x="400" y="495" width="180" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="ret1" value="&lt;b&gt;Interactive (hot):&lt;/b&gt; 30 days default → up to 730 days&lt;br&gt;Cost: Free for first 31 days, then $0.10/GB/month" style="text;html=1;fontSize=9;fontColor=#333;" vertex="1" parent="1">
+          <mxGeometry x="80" y="520" width="270" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="ret2" value="&lt;b&gt;Archive (cold):&lt;/b&gt; Up to 12 years total&lt;br&gt;Cost: $0.02/GB/month" style="text;html=1;fontSize=9;fontColor=#333;" vertex="1" parent="1">
+          <mxGeometry x="370" y="520" width="200" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="ret3" value="&lt;b&gt;Ingestion:&lt;/b&gt; $2.76/GB (Analytics) or $0.65/GB (Basic)&lt;br&gt;Free allowance: 5 GB/day per billing account" style="text;html=1;fontSize=9;fontColor=#333;" vertex="1" parent="1">
+          <mxGeometry x="600" y="520" width="300" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="ret4" value="&lt;b&gt;💡 Tip:&lt;/b&gt; Export to Azure Storage ($0.018/GB/month) for cheapest long-term retention" style="text;html=1;fontSize=9;fontColor=#F57F17;" vertex="1" parent="1">
+          <mxGeometry x="300" y="555" width="400" height="20" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

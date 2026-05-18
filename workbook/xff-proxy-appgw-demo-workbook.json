@@ -59,7 +59,7 @@
               "additionalResourceOptions": ["value::1"]
             },
             "defaultValue": "value::1",
-            "value": "/subscriptions/64e1939f-6460-4656-ad75-dcc277b155f1/resourceGroups/rg-xff-test-eastus/providers/Microsoft.OperationalInsights/workspaces/log-xff-test-cg4l2wl4myrww",
+            "value": "/subscriptions/<your-subscription-id>/resourceGroups/<your-resource-group>/providers/Microsoft.OperationalInsights/workspaces/<your-workspace-name>",
             "label": "Log Analytics Workspace"
           },
           {
@@ -76,7 +76,7 @@
               "additionalResourceOptions": ["value::1"]
             },
             "defaultValue": "value::1",
-            "value": "/subscriptions/64e1939f-6460-4656-ad75-dcc277b155f1/resourceGroups/rg-xff-test-eastus/providers/Microsoft.Insights/components/ai-xff-test-cg4l2wl4myrww",
+            "value": "/subscriptions/<your-subscription-id>/resourceGroups/<your-resource-group>/providers/Microsoft.Insights/components/<your-appinsights-name>",
             "label": "Application Insights"
           }
         ],
@@ -465,14 +465,14 @@
     {
       "type": 1,
       "content": {
-        "json": "---\n## 7. Summary — Proof of Issue\n\n| Finding | Evidence |\n|---------|----------|\n| **App Gateway `clientIP_s`** shows Proxy VIP, not real client | See Section 1 — IP `4.174.181.251` is the ACI proxy |\n| **APIM `CallerIpAddress`** shows App GW or Proxy IP, not real client | See Section 3 — XFF header must be inspected |\n| **App Service `CIp`** shows App Gateway IP, not real client | See Section 2 — IP `4.205.85.213` is the App GW |\n| **Real client IP** only available in `X-Forwarded-For` header | See Section 5 — requires ForwardedHeaders middleware |\n\n### Fix Steps\n1. **Proxy (VIP):** Must set `X-Forwarded-For` header (Nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`)\n2. **App Gateway:** Deploy XFF rewrite rule with `{var_add_x_forwarded_for_proxy}` to strip `:port`\n3. **APIM:** Configure diagnostic settings to log `X-Forwarded-For` header; use policy to forward XFF to backend\n4. **App Service:** Deploy `ForwardedHeadersMiddleware` + `XffTelemetryInitializer` to capture XFF in App Insights\n\n> ⚠️ **Clean up when done:** `az group delete -n rg-xff-test-eastus --yes --no-wait`"
+        "json": "---\n## 7. Summary — Proof of Issue\n\n| Finding | Evidence |\n|---------|----------|\n| **App Gateway `clientIP_s`** shows Proxy VIP, not real client | See Section 1 — IP `4.174.181.251` is the ACI proxy |\n| **APIM `CallerIpAddress`** shows App GW or Proxy IP, not real client | See Section 3 — XFF header must be inspected |\n| **App Service `CIp`** shows App Gateway IP, not real client | See Section 2 — IP `4.205.85.213` is the App GW |\n| **Real client IP** only available in `X-Forwarded-For` header | See Section 5 — requires ForwardedHeaders middleware |\n\n### Fix Steps\n1. **Proxy (VIP):** Must set `X-Forwarded-For` header (Nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`)\n2. **App Gateway:** Deploy XFF rewrite rule with `{var_add_x_forwarded_for_proxy}` to strip `:port`\n3. **APIM:** Configure diagnostic settings to log `X-Forwarded-For` header; use policy to forward XFF to backend\n4. **App Service:** Deploy `ForwardedHeadersMiddleware` + `XffTelemetryInitializer` to capture XFF in App Insights\n\n> ⚠️ **Clean up when done:** `az group delete -n <your-resource-group> --yes --no-wait`"
       },
       "name": "summary"
     }
   ],
   "fallbackResourceIds": [
-    "/subscriptions/64e1939f-6460-4656-ad75-dcc277b155f1/resourceGroups/rg-xff-test-eastus/providers/Microsoft.OperationalInsights/workspaces/log-xff-test-cg4l2wl4myrww",
-    "/subscriptions/64e1939f-6460-4656-ad75-dcc277b155f1/resourceGroups/rg-xff-test-eastus/providers/Microsoft.Insights/components/ai-xff-test-cg4l2wl4myrww"
+    "/subscriptions/<your-subscription-id>/resourceGroups/<your-resource-group>/providers/Microsoft.OperationalInsights/workspaces/<your-workspace-name>",
+    "/subscriptions/<your-subscription-id>/resourceGroups/<your-resource-group>/providers/Microsoft.Insights/components/<your-appinsights-name>"
   ],
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }

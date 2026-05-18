@@ -4,7 +4,7 @@
 // Run these in Log Analytics workspace to explore custom dimensions
 // from Application Insights and APIM gateway logs.
 //
-// Workspace: log-xff-test-cg4l2wl4myrww
+// Workspace: <your-workspace-name>
 // ============================================================================
 
 

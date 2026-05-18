@@ -1,8 +1,18 @@
 #!/usr/bin/env pwsh
-# Creates XFF Monitoring saved searches in Log Analytics workspace
-# Usage: .\scripts\create-saved-searches.ps1
+<#
+.SYNOPSIS
+    Creates XFF Monitoring saved searches in a Log Analytics workspace.
+.EXAMPLE
+    .\scripts\create-saved-searches.ps1 -SubscriptionId <sub> -ResourceGroup <rg> -WorkspaceName <ws>
+#>
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)] [string] $SubscriptionId,
+    [Parameter(Mandatory = $true)] [string] $ResourceGroup,
+    [Parameter(Mandatory = $true)] [string] $WorkspaceName
+)
 
-$wsBase = "https://management.azure.com/subscriptions/64e1939f-6460-4656-ad75-dcc277b155f1/resourceGroups/rg-xff-test-eastus/providers/Microsoft.OperationalInsights/workspaces/log-xff-test-cg4l2wl4myrww/savedSearches"
+$wsBase = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches"
 $apiVer = "api-version=2020-08-01"
 
 $queries = @(

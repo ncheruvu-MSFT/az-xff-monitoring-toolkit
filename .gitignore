@@ -1,0 +1,76 @@
+# ----- Local working / scratch files -----
+.app-name
+.win-region
+*.local
+*.local.*
+.env
+.env.*
+
+# ----- Secrets / credentials -----
+*.pem
+*.pfx
+*.key
+*.p12
+*.cer
+secrets.json
+local.settings.json
+appsettings.Development.json
+appsettings.Local.json
+*.publishsettings
+*.PublishSettings
+.azure/
+
+# ----- .NET build artifacts -----
+bin/
+obj/
+publish/
+out/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.lscache
+*.cache
+TestResults/
+
+# ----- NuGet -----
+packages/
+*.nupkg
+*.snupkg
+nuget.exe
+project.lock.json
+project.assets.json
+.nuget/
+
+# ----- VS / VS Code / Rider -----
+.vs/
+.vscode/
+*.swp
+.idea/
+*.iml
+
+# ----- Node (in case docs/samples add JS later) -----
+node_modules/
+npm-debug.log*
+
+# ----- Python -----
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# ----- OS junk -----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Logs / archives / temp -----
+*.log
+*.zip
+*.bak
+*.tmp
+~$*
+
+# ----- Sample capture results (contain live traffic IPs / Azure LB IPs) -----
+samples/**/sample-results/

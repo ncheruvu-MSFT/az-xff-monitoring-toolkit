@@ -1,0 +1,4 @@
+union AppRequests, AppTraces, AppDependencies
+| where TimeGenerated > ago(2h)
+| where AppRoleName has "app-xff-net47" or AppRoleInstance has "app-xff-net47"
+| summarize Count = count(), Latest = max(TimeGenerated) by Type

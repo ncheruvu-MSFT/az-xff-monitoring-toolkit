@@ -270,6 +270,63 @@ APIM **passes through** the `X-Forwarded-For` header from upstream proxies (Fron
 
 ---
 
+### 6.4 Azure App Service
+
+Azure App Service is typically the **innermost backend** in a multi-tier architecture. The platform **receives** the `X-Forwarded-For` header from upstream proxies (Front Door, App Gateway, APIM) but **does not set, modify, or natively log it**. Capturing XFF on App Service requires application-level configuration plus the right telemetry pipeline.
+
+**Default platform behavior:**
+
+| Aspect | Behavior |
+|--------|----------|
+| **Inbound XFF header** | Available in `HttpRequest.Headers["X-Forwarded-For"]` — App Service does **not** strip it |
+| **`REMOTE_ADDR` / `HttpContext.Connection.RemoteIpAddress`** | TCP peer IP only (e.g., the upstream App Gateway/APIM IP) — **not** the real end-user IP |
+| **`AppServiceHTTPLogs.CIp`** | TCP peer IP only — **no XFF column exists** in the platform diagnostic table |
+| **Application Insights `client_IP`** | Anonymized to `0.0.0.0` by default (privacy) — and even when enabled, reflects the TCP peer, not XFF |
+
+> **Key limitation:** Because `AppServiceHTTPLogs` has no XFF column, you **cannot** capture the original client IP through diagnostic settings alone. You must propagate XFF into Application Insights `customDimensions` (or another structured log sink) from the application layer.
+
+**How to configure XFF logging:**
+
+1. **Enable Diagnostic Settings** — Send `AppServiceHTTPLogs`, `AppServiceConsoleLogs`, and `AppServiceAppLogs` to a Log Analytics workspace. Note: this captures the TCP peer IP only; treat it as an audit trail, not as the real client IP.
+2. **Link Application Insights** — Under **App Service → Application Insights**, enable the recommended agent or SDK. This is the pipeline that will carry the XFF value end-to-end.
+3. **Configure `ForwardedHeadersMiddleware` (ASP.NET Core)** — Enable forwarded-header processing **before** auth/routing, and set `KnownNetworks` / `KnownProxies` to the subnets of your App Gateway / APIM / Front Door fronting tier. This makes `HttpContext.Connection.RemoteIpAddress` resolve to the real client.
+4. **Add a Telemetry Initializer** — Write `X-Forwarded-For` (raw) and the resolved client IP into App Insights `customDimensions` so they are queryable from KQL. See the sample [`XffTelemetryInitializer`](samples/dotnet/Program.cs).
+5. **Python / Flask / FastAPI** — Use `werkzeug.middleware.proxy_fix.ProxyFix` (Flask) or a custom ASGI middleware (FastAPI) with a configured trusted-hop count, and emit XFF as a span attribute via Azure Monitor OpenTelemetry. See [`samples/python/xff_middleware.py`](samples/python/xff_middleware.py).
+6. **Classic ASP.NET (.NET Framework 4.x)** — Read `Request.ServerVariables["HTTP_X_FORWARDED_FOR"]` in a `Global.asax` `BeginRequest` handler and attach it via a custom `ITelemetryInitializer` registered in `ApplicationInsights.config`. See [`samples/dotnet-framework-47/`](samples/dotnet-framework-47/).
+
+**Key behavior:**
+- App Service is **passive** with respect to XFF — it neither adds nor strips the header. Whatever the upstream proxy puts on the wire is what your app code sees.
+- The first (leftmost) IP in XFF is the original client; subsequent entries are each intermediate proxy in order. Always extract the leftmost untrusted IP after applying your trusted-proxy list.
+- `ForwardLimit` should match the number of trusted proxies in the chain (e.g., `3` for Proxy → App Gateway → APIM → App Service). Setting it to `null` lets the middleware honour the full chain — only safe when `KnownNetworks` strictly bounds trust.
+- App Insights `client_IP` collection is **opt-in**. Even when enabled, it reflects the peer the App Insights SDK observes (typically App Gateway) — `customDimensions['ResolvedClientIp']` populated from XFF is the source of truth for the real user IP.
+- For **Linux App Service**, the same middleware patterns apply; there is no platform-level difference for XFF handling between Windows and Linux plans.
+
+**KQL — querying the XFF you wrote into Application Insights:**
+
+```kusto
+requests
+| where timestamp > ago(1h)
+| extend Xff = tostring(customDimensions["X-Forwarded-For"])
+| extend ResolvedClientIp = tostring(customDimensions["ResolvedClientIp"])
+| where isnotempty(Xff)
+| project timestamp, name, resultCode, Xff, ResolvedClientIp, AppGwClientIp = client_IP
+| take 50
+```
+
+**Microsoft Learn documentation:**
+- [Configure ASP.NET Core to work with proxy servers and load balancers](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer)
+- [App Service diagnostic logs — enable and view](https://learn.microsoft.com/en-us/azure/app-service/troubleshoot-diagnostic-logs)
+- [`AppServiceHTTPLogs` table reference](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/appservicehttplogs)
+- [Application Insights for ASP.NET Core](https://learn.microsoft.com/en-us/azure/azure-monitor/app/asp-net-core)
+- [Application Insights `ITelemetryInitializer`](https://learn.microsoft.com/en-us/azure/azure-monitor/app/api-filtering-sampling#add-properties-itelemetryinitializer)
+- [Capture X-Forwarded-For in App Service (Q&A)](https://learn.microsoft.com/en-us/answers/questions/1053449/can-we-capture-x-forwarded-for-header-in-app-servi)
+- [Flask `ProxyFix` middleware](https://werkzeug.palletsprojects.com/en/latest/middleware/proxy_fix/)
+- [Azure Monitor OpenTelemetry for Python](https://learn.microsoft.com/en-us/azure/azure-monitor/app/opentelemetry-enable?tabs=python)
+
+> **About App Gateway `AGWAccessLogs.ClientIp`** — Multiple customers ask whether `ClientIp` should contain the full `X-Forwarded-For` chain. **No — this is by design.** The `ClientIp` column always records the **TCP peer IP** (the device directly connected to App Gateway). When a proxy or Front Door sits in front of App Gateway, `ClientIp` is that proxy's IP, not the original client. The full XFF chain is not surfaced as a dedicated column in `AGWAccessLogs`; capture it by (a) using a rewrite rule with the `{var_add_x_forwarded_for_proxy}` server variable to normalize XFF before it reaches the backend, and (b) logging the resolved client IP in your backend's Application Insights `customDimensions` (sections 6.2 and 6.4 above). See [AGWAccessLogs schema](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/agwaccesslogs).
+
+---
+
 ## 7. Centralized Azure Policy for XFF Governance
 
 Use Azure Policy at the **management group** or **subscription** scope to enforce XFF header logging and normalization across all three services centrally.

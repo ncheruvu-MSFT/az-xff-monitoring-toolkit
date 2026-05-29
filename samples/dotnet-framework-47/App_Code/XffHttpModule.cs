@@ -33,6 +33,7 @@ namespace XffDemo.Net47
                 if (path.IndexOf("Reports.aspx", StringComparison.OrdinalIgnoreCase) < 0)
                 {
                     XffCapture.Add(entry);
+                    XffLogIngestion.Enqueue(entry);
                 }
             }
             catch (Exception ex)

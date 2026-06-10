@@ -1,0 +1,84 @@
+// ============================================================================
+// KQL Queries – Azure Front Door XFF / Client-IP Validation
+// ============================================================================
+// Run these in Log Analytics (portal Logs blade) after sending traffic through
+// the Front Door endpoint. They validate that Front Door captures the client
+// IP and writes it to AzureDiagnostics (Category == "FrontDoorAccessLog").
+//
+// Environment:
+//   Front Door endpoint : https://ep-xff-test-hab6exd8hnhshzbg.b01.azurefd.net/
+//   Front Door profile  : afd-xff-test  (Microsoft.Cdn/profiles, Standard)
+//   Origin              : app-xff-test-cg4l2wl4myrww.azurewebsites.net
+//   Diagnostic setting  : xff-diag-frontdoor  ->  log-xff-test-cg4l2wl4myrww
+//
+// NOTE ON CLI QUOTING (Windows): the Azure CLI strips embedded double quotes
+// from --analytics-query on Windows. When running these from `az monitor
+// log-analytics query`, replace the inner "..." string literals with '...'
+// (KQL accepts single quotes). In the portal Logs blade, use them as-is.
+// ============================================================================
+
+
+// ── 1. Captured client IPs (summary) ────────────────────────────────────────
+// EXPECTED: clientIp_s = the TCP client IP Front Door observed for each request.
+// (Behind an upstream corporate proxy, this is the proxy egress IP; the
+//  original caller would then appear in the X-Forwarded-For chain.)
+
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.CDN" and Category == "FrontDoorAccessLog"
+| where TimeGenerated > ago(1h)
+| summarize Requests = count(), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)
+    by clientIp_s, httpStatusCode_s
+| order by Requests desc
+
+
+// ── 2. Per-request access log detail ────────────────────────────────────────
+// clientIp_s  = client IP as seen by Front Door (X-Azure-ClientIP at origin)
+// socketIp_s  = socket-level peer IP (X-Azure-SocketIP at origin)
+
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.CDN" and Category == "FrontDoorAccessLog"
+| where TimeGenerated > ago(1h)
+| project
+    TimeGenerated,
+    clientIp_s,
+    socketIp_s,
+    httpMethod_s,
+    requestUri_s,
+    httpStatusCode_s,
+    userAgent_s
+| order by TimeGenerated desc
+
+
+// ── 3. X-Forwarded-For chain analysis ───────────────────────────────────────
+// When an upstream proxy adds XFF, the first hop is the original client.
+// Front Door appends the TCP peer it sees to the existing chain.
+
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.CDN" and Category == "FrontDoorAccessLog"
+| where TimeGenerated > ago(1h)
+| extend xffChain = column_ifexists("xForwardedFor_s", "")
+| where isnotempty(xffChain)
+| extend clientFromXff = tostring(split(xffChain, ",")[0])
+| project TimeGenerated, clientIp_s, socketIp_s, xffChain, clientFromXff, requestUri_s
+| order by TimeGenerated desc
+
+
+// ── 4. Top client IPs ───────────────────────────────────────────────────────
+
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.CDN" and Category == "FrontDoorAccessLog"
+| where TimeGenerated > ago(24h)
+| summarize RequestCount = count() by clientIp_s
+| top 20 by RequestCount desc
+
+
+// ── 5. WAF blocked requests (if a WAF policy is attached) ────────────────────
+// For IP restrictions on Front Door WAF, match on SocketAddr (cannot be
+// spoofed) rather than RemoteAddr (honors X-Forwarded-For).
+
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.CDN" and Category == "FrontDoorWebApplicationFirewallLog"
+| where TimeGenerated > ago(24h)
+| where action_s == "Block"
+| project TimeGenerated, clientIP_s, requestUri_s, ruleName_s, policy_s, action_s, details_msg_s
+| order by TimeGenerated desc

@@ -71,6 +71,49 @@ Front Door Standard/Premium SKUs include a built-in analytics dashboard:
 - Navigate to **Front Door profile → Analytics** in the Azure portal
 - View traffic by client IP, geography, status code, and latency
 
+## Validated Reference Deployment
+
+A working Front Door Standard deployment in front of the toolkit's test App Service
+was used to validate end-to-end client-IP capture. The reusable module is
+[`infra/modules/frontdoor-xff.bicep`](../infra/modules/frontdoor-xff.bicep), and the
+validated queries live in
+[`queries/xff-frontdoor-validation.kql`](../queries/xff-frontdoor-validation.kql).
+
+**Deploy:**
+
+```bash
+az deployment group create \
+  --resource-group <rg> \
+  --template-file infra/modules/frontdoor-xff.bicep \
+  --parameters \
+      originHostName=<app>.azurewebsites.net \
+      logAnalyticsWorkspaceId=/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.OperationalInsights/workspaces/<workspace>
+```
+
+The module provisions a Front Door Standard profile, endpoint, origin group, origin,
+default route, and a diagnostic setting that streams `FrontDoorAccessLog` to the
+central Log Analytics workspace.
+
+**Validation evidence** — after sending test traffic through the Front Door endpoint,
+client IPs appeared in `AzureDiagnostics`:
+
+| TimeGenerated (UTC) | clientIp_s | socketIp_s | requestUri_s | httpStatusCode_s |
+|---------------------|------------|------------|--------------|------------------|
+| 23:59:51 | `40.65.108.177` | `40.65.108.177` | `/?bg=18` | 200 |
+| 23:59:38 | `52.148.140.42` | `52.148.140.42` | `/?bg=17` | 200 |
+| 23:59:26 | `20.29.225.195` | `20.29.225.195` | `/?bg=16` | 200 |
+| 23:58:58 | `4.194.122.162` | `4.194.122.162` | `/?bg=14` | 200 |
+
+> **Reading the result:** when the test client egresses through a corporate proxy pool,
+> `clientIp_s` records the **proxy egress IP** Front Door observed (here, Azure ranges),
+> not the originating host. A direct external client's IP lands in `clientIp_s` directly,
+> and any upstream-proxy original caller appears first in the `X-Forwarded-For` chain.
+
+> **CLI quoting (Windows):** the Azure CLI strips embedded double quotes from
+> `--analytics-query`. When running these queries via `az monitor log-analytics query`,
+> use single-quoted KQL string literals (e.g. `== 'MICROSOFT.CDN'`). In the portal Logs
+> blade, the double-quoted form works unchanged.
+
 ## KQL Queries for Front Door
 
 ### Access Log Overview

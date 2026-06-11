@@ -210,6 +210,23 @@ Azure Front Door **automatically appends** the client's IP to the `X-Forwarded-F
 - The `X-Azure-ClientIP` header is set by Front Door and represents the TCP-level client IP — this is more trustworthy than XFF in multi-proxy chains.
 - For WAF IP restrictions, always match on `SocketAddr` (TCP peer IP), **not** `RemoteAddr` (which respects XFF and is spoofable).
 
+**KQL query — capture client IPs from Front Door access logs:**
+
+Run this in the Log Analytics **Logs** blade after Diagnostic Settings are enabled. It summarizes the client IPs Front Door captured (`clientIp_s`) along with the socket-level peer IP (`socketIp_s`) and HTTP status:
+
+```kql
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.CDN" and Category == "FrontDoorAccessLog"
+| where TimeGenerated > ago(1h)
+| summarize Requests = count(), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)
+    by clientIp_s, socketIp_s, httpStatusCode_s
+| order by Requests desc
+```
+
+> **CLI quoting note (Windows):** The Azure CLI strips embedded double quotes from `--analytics-query`. When running this via `az monitor log-analytics query`, replace the inner `"..."` string literals with `'...'` (KQL accepts single quotes). In the portal Logs blade, use it as-is.
+
+Additional Front Door validation queries (per-request detail, X-Forwarded-For chain analysis, top client IPs, and WAF blocked requests) are available in [`queries/xff-frontdoor-validation.kql`](queries/xff-frontdoor-validation.kql).
+
 **Microsoft Learn documentation:**
 - [Azure Front Door HTTP headers protocol support](https://learn.microsoft.com/en-us/azure/frontdoor/front-door-http-headers-protocol)
 - [Azure Front Door diagnostic logs](https://learn.microsoft.com/en-us/azure/frontdoor/front-door-diagnostics)

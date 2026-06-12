@@ -278,6 +278,46 @@ APIM **passes through** the `X-Forwarded-For` header from upstream proxies (Fron
 - Use `set-header` and `set-variable` policies to extract and propagate the real client IP.
 - APIM's built-in `context.Request.IpAddress` returns the immediate caller's IP (which may be App Gateway, not the end user).
 
+**KQL — retrieving client IPs:**
+
+The query depends on which logging pipeline you configured. The `Xff` value holds the real client IP chain, while `client_IP` / `CallerIpAddress` is only the immediate TCP peer (e.g., the App Gateway or Front Door IP).
+
+*Option A — via Application Insights (recommended).* Requires `X-Forwarded-For` to be added under **Headers to log** in the APIM API-level diagnostic settings; the header then appears in `customDimensions` with the `Request-Header-` prefix:
+
+```kusto
+requests
+| where timestamp > ago(24h)
+| extend Xff = tostring(customDimensions["Request-Header-x-forwarded-for"])
+| where isnotempty(Xff)
+| project timestamp, name, url, resultCode, Xff, client_IP, duration
+| order by timestamp desc
+```
+
+To extract only the **real client IP** (the leftmost hop in the chain):
+
+```kusto
+requests
+| where timestamp > ago(24h)
+| extend Xff = tostring(customDimensions["Request-Header-x-forwarded-for"])
+| extend ClientIp = trim(" ", tostring(split(Xff, ",")[0]))
+| where isnotempty(ClientIp)
+| project timestamp, name, ClientIp, Xff, resultCode
+| order by timestamp desc
+```
+
+*Option B — via `ApiManagementGatewayLogs` (GatewayLogs sent directly to Log Analytics):*
+
+```kusto
+ApiManagementGatewayLogs
+| where TimeGenerated > ago(24h)
+| where isnotempty(RequestHeaders)
+| extend headers = parse_json(RequestHeaders)
+| extend Xff = tostring(headers["X-Forwarded-For"])
+| where isnotempty(Xff)
+| project TimeGenerated, OperationId, ApiId, Url, ResponseCode, Xff, CallerIpAddress
+| order by TimeGenerated desc
+```
+
 **Microsoft Learn documentation:**
 - [How to use API Management diagnostic settings](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-use-azure-monitor)
 - [APIM policy reference — set-header](https://learn.microsoft.com/en-us/azure/api-management/set-header-policy)

@@ -305,7 +305,7 @@ requests
 | order by timestamp desc
 ```
 
-*Option B — via `ApiManagementGatewayLogs` (GatewayLogs sent directly to Log Analytics):*
+*Option B — via `ApiManagementGatewayLogs` request headers (GatewayLogs sent directly to Log Analytics, with `X-Forwarded-For` added to logged headers):*
 
 ```kusto
 ApiManagementGatewayLogs
@@ -317,6 +317,23 @@ ApiManagementGatewayLogs
 | project TimeGenerated, OperationId, ApiId, Url, ResponseCode, Xff, CallerIpAddress
 | order by TimeGenerated desc
 ```
+
+*Option C — via `ApiManagementGatewayLogs` trace records (when the [`xff-policy`](samples/apim-policy/xff-global-policy.xml) emits a `<trace>` with the resolved IPs).* The policy writes a message such as `XFF=10.16.179.97, CallerIP=10.16.179.97` into the `TraceRecords` column. Use `mv-expand` to flatten the trace array and `extract` to pull each value out of the message — do **not** index a single `TraceRecords[0]` element, since a request can emit multiple trace entries:
+
+```kusto
+ApiManagementGatewayLogs
+| where TimeGenerated > ago(24h)
+| where isnotempty(TraceRecords)
+| mv-expand tracerecord = parse_json(TraceRecords)
+| where tostring(tracerecord.source) == "xff-policy"
+| extend message = tostring(tracerecord.message)
+| extend Xff = extract(@"XFF=([^,]+)", 1, message)
+| extend CallerIp = extract(@"CallerIP=([^\s,]+)", 1, message)
+| project TimeGenerated, OperationId, ApiId, Url, ResponseCode, Xff, CallerIp
+| order by TimeGenerated desc
+```
+
+> **Why `split(message, "CallerIP=")` returns nothing:** `split` produces an array, so you must index into it — e.g. `trim(" ", tostring(split(message, "CallerIP=")[1]))`. The `extract` regex approach above is more robust because it tolerates ordering and whitespace changes in the trace message.
 
 **Microsoft Learn documentation:**
 - [How to use API Management diagnostic settings](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-use-azure-monitor)
